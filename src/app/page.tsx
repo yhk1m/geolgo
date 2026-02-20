@@ -133,6 +133,40 @@ export default function HomePage() {
             <span>각 지역 지리올림피아드 담당자</span>
           </div>
         </div>
+
+        <div className="mt-6 rounded-lg border border-[#e5e5e5] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[#111] text-white">
+                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['서울', 'rokmc807@gmail.com', '광주', 'christin092@gmail.com', '부산', 'narayou1@naver.com'],
+                ['인천', 'yatmotakeshi@naver.com', '울산', 'geoedtr@gmail.com', '', ''],
+                ['경기', 'ilovejos@korea.kr', '대구', 'obiwan@yeungnam.ms.kr', '경남', 'geo9835@naver.com'],
+                ['강원', 'sky89526@naver.com', '경북', 'chui5222@naver.com', '전북', 'ikarroce@hanmail.net'],
+                ['충북', 'geolee0401@korea.kr', '대전', 'loverlckd@naver.com', '제주', 'gtow@naver.com'],
+                ['충남', 'swf9519@ai.cne.go.kr', '세종', 'xodn0109@naver.com', '', ''],
+              ].map((row, i) => (
+                <tr key={i} className={i % 2 === 1 ? 'bg-[#f7f7f7]' : 'bg-white'}>
+                  <td className="px-4 py-2 font-medium text-[#111]">{row[0]}</td>
+                  <td className="px-4 py-2 text-[#666]">{row[1]}</td>
+                  <td className="px-4 py-2 font-medium text-[#111]">{row[2]}</td>
+                  <td className="px-4 py-2 text-[#666]">{row[3]}</td>
+                  <td className="px-4 py-2 font-medium text-[#111]">{row[4]}</td>
+                  <td className="px-4 py-2 text-[#666]">{row[5]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
     </div>
