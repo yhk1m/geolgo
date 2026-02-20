@@ -10,8 +10,11 @@ const notoSansKr = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "지올고(geolgo) - 전국지리올림피아드 신청 시스템",
+  title: "지올고(Geolgo) - 전국지리올림피아드 신청 시스템",
   description: "2026년 제26회 전국지리올림피아드 대회 안내 및 참가 신청",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

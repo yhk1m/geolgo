@@ -56,7 +56,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/admin/dashboard" className="flex items-baseline gap-1.5 tracking-tight">
-              <span className="font-bold">지올고(geolgo)</span>
+              <span className="font-bold">지올고(Geolgo)</span>
               <span className="text-[13px] font-normal text-[#888]">관리자</span>
             </Link>
             <nav className="flex items-center gap-1">
