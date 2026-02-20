@@ -21,7 +21,7 @@ export default function Navigation() {
     <header className="border-b border-[#e5e5e5] bg-white sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-baseline gap-1.5 tracking-tight text-[#111]">
-          <span className="text-lg font-bold">지올고(Geolgo)</span>
+          <span className="text-lg font-bold">Geolgo</span>
           <span className="text-[14px] font-normal text-[#999]">전국지리올림피아드 신청 시스템</span>
         </Link>
         <nav className="flex items-center gap-1">
