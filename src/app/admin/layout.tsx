@@ -22,7 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     // Simple password check - in production, use proper auth
-    if (password === 'admin1234') {
+    if (password === 'admin0220') {
       setAuthenticated(true);
       sessionStorage.setItem('admin_auth', 'true');
     } else {
