@@ -24,6 +24,25 @@ type Tab = 'all' | 'pending' | 'confirmed';
 type SortKey = 'type' | 'date';
 type SortDir = 'asc' | 'desc' | 'default';
 
+const SCHOOL_SPECIAL: Record<string, string> = {
+  '용인한국외국어대학교부설고등학교': '외대부고',
+  '이화여자대학교사범대학부속이화금란고등학교': '이대부고',
+  '이화여자외국어고등학교': '이화외고',
+};
+
+function shortenSchool(name: string): string {
+  if (SCHOOL_SPECIAL[name]) return SCHOOL_SPECIAL[name];
+  // 사대부고: (국립)XX대학교사범대학부설/부속...고등학교 → XX사대부고
+  const sabu = name.match(/(?:국립)?(.+?)대학교사범대학부[설속].*고등학교/);
+  if (sabu) return `${sabu[1]}사대부고`;
+  // 외국어고: XX외국어고등학교 → XX외고
+  if (name.includes('외국어')) return name.replace('외국어', '외').replace(/등학교$/, '');
+  // 여자고: XX여자고등학교 → XX여고
+  if (name.endsWith('여자고등학교')) return name.replace('여자고등학교', '여고');
+  // 기본: 등학교 제거
+  return name.replace(/등학교$/, '');
+}
+
 export default function PaymentsPage() {
   const [data, setData] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,7 +376,7 @@ export default function PaymentsPage() {
                 )}
                 <td className="font-medium text-[#111] whitespace-nowrap">{r.name}</td>
                 <td>
-                  <span className="sm:hidden">{r.school.replace(/등학교$/, '')}</span>
+                  <span className="sm:hidden">{shortenSchool(r.school)}</span>
                   <span className="hidden sm:inline">{r.school}</span>
                 </td>
                 <td>
