@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getMockRegistrations, updateMockPaymentStatus } from '@/lib/mockdata';
-import { regionNameMap } from '@/lib/regions';
+import { regionNameMap, regionShortMap } from '@/lib/regions';
 import * as XLSX from 'xlsx';
 
 interface Registration {
@@ -218,69 +218,69 @@ export default function PaymentsPage() {
     <div>
       <div className="flex items-center justify-end mb-6">
         <div className="flex items-center border border-[#e5e5e5] rounded-lg overflow-hidden">
-          <span className="px-3 py-1.5 text-sm font-medium text-[#999] bg-[#fafafa]">엑셀 다운로드</span>
-          <button onClick={() => downloadExcel('all')} className="px-3 py-1.5 text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
-            전체 명단
+          <span className="px-3 py-1.5 text-sm font-medium text-[#999] bg-[#fafafa] hidden sm:inline">엑셀 다운로드</span>
+          <button onClick={() => downloadExcel('all')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] sm:border-l border-[#e5e5e5]">
+            전체
           </button>
-          <button onClick={() => downloadExcel('pending')} className="px-3 py-1.5 text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
-            입금 대기
+          <button onClick={() => downloadExcel('pending')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
+            대기
           </button>
-          <button onClick={() => downloadExcel('confirmed')} className="px-3 py-1.5 text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
-            입금 확인
+          <button onClick={() => downloadExcel('confirmed')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
+            확인
           </button>
         </div>
       </div>
 
       {/* 요약 */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="flex items-center justify-between px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
           <span className="text-sm text-[#999]">대기 중</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#111]">{pending.length}명</span>
+            <span className="text-xl sm:text-2xl font-bold text-[#111]">{pending.length}명</span>
             <span className="text-xs text-[#999]">{(pending.length * 20000).toLocaleString()}원</span>
           </div>
         </div>
-        <div className="flex items-center justify-between px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
           <span className="text-sm text-[#999]">입금 확인</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#111]">{confirmed.length}명</span>
+            <span className="text-xl sm:text-2xl font-bold text-[#111]">{confirmed.length}명</span>
             <span className="text-xs text-[#999]">{(confirmed.length * 20000).toLocaleString()}원</span>
           </div>
         </div>
-        <div className="flex items-center justify-between px-5 py-3 rounded-lg border border-[#111] bg-[#111] text-white">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#111] bg-[#111] text-white">
           <span className="text-sm text-[#888]">확인율</span>
-          <span className="text-2xl font-bold">
+          <span className="text-xl sm:text-2xl font-bold">
             {data.length > 0 ? Math.round((confirmed.length / data.length) * 100) : 0}%
           </span>
         </div>
       </div>
 
       {/* 탭 + 검색 + 일괄 버튼 */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center border border-[#e5e5e5] rounded-lg overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="flex items-center border border-[#e5e5e5] rounded-lg overflow-hidden shrink-0">
           <button
             onClick={() => changeTab('all')}
-            className={`px-4 py-[10px] text-sm font-medium whitespace-nowrap ${
+            className={`px-3 sm:px-4 py-[10px] text-xs sm:text-sm font-medium whitespace-nowrap ${
               tab === 'all' ? 'bg-[#111] text-white' : 'bg-white text-[#666]'
             }`}
           >
-            전체 명단 ({data.length})
+            전체 ({data.length})
           </button>
           <button
             onClick={() => changeTab('pending')}
-            className={`px-4 py-[10px] text-sm font-medium whitespace-nowrap ${
+            className={`px-3 sm:px-4 py-[10px] text-xs sm:text-sm font-medium whitespace-nowrap ${
               tab === 'pending' ? 'bg-[#111] text-white' : 'bg-white text-[#666]'
             }`}
           >
-            입금 대기 ({pending.length})
+            대기 ({pending.length})
           </button>
           <button
             onClick={() => changeTab('confirmed')}
-            className={`px-4 py-[10px] text-sm font-medium whitespace-nowrap ${
+            className={`px-3 sm:px-4 py-[10px] text-xs sm:text-sm font-medium whitespace-nowrap ${
               tab === 'confirmed' ? 'bg-[#111] text-white' : 'bg-white text-[#666]'
             }`}
           >
-            입금 확인 ({confirmed.length})
+            확인 ({confirmed.length})
           </button>
         </div>
         <input
@@ -298,7 +298,7 @@ export default function PaymentsPage() {
                 ? bulkConfirm(Array.from(selected))
                 : bulkRevert(Array.from(selected))
             }
-            className="btn btn-primary text-sm px-4 py-1.5 ml-auto"
+            className="btn btn-primary text-xs sm:text-sm px-4 py-1.5 sm:ml-auto"
           >
             {tab === 'pending'
               ? `선택 입금 확인 (${selected.size}명)`
@@ -332,7 +332,7 @@ export default function PaymentsPage() {
                 유형{sortIndicator('type')}
               </th>
               {tab === 'all' && <th>입금</th>}
-              <th>금액</th>
+              <th className="hidden sm:table-cell">금액</th>
               <th
                 onClick={() => toggleSort('date')}
                 className="cursor-pointer select-none hover:text-[#111]"
@@ -355,9 +355,15 @@ export default function PaymentsPage() {
                     />
                   </td>
                 )}
-                <td className="font-medium text-[#111]">{r.name}</td>
-                <td>{r.school}</td>
-                <td>{regionNameMap[r.region] || r.region}</td>
+                <td className="font-medium text-[#111] whitespace-nowrap">{r.name}</td>
+                <td>
+                  <span className="sm:hidden">{r.school.replace(/등학교$/, '')}</span>
+                  <span className="hidden sm:inline">{r.school}</span>
+                </td>
+                <td>
+                  <span className="sm:hidden">{regionShortMap[r.region] || r.region}</span>
+                  <span className="hidden sm:inline">{regionNameMap[r.region] || r.region}</span>
+                </td>
                 <td>{r.registration_type === 'group' ? '단체' : '개인'}</td>
                 {tab === 'all' && (
                   <td>
@@ -368,9 +374,14 @@ export default function PaymentsPage() {
                     </span>
                   </td>
                 )}
-                <td>{r.payment_amount?.toLocaleString()}원</td>
-                <td className="text-[#999] text-sm">
-                  {new Date(r.created_at).toLocaleDateString('ko-KR')}
+                <td className="hidden sm:table-cell">{r.payment_amount?.toLocaleString()}원</td>
+                <td className="text-[#999] text-sm whitespace-nowrap">
+                  <span className="sm:hidden">
+                    {`${new Date(r.created_at).getMonth() + 1}.${new Date(r.created_at).getDate()}.`}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {new Date(r.created_at).toLocaleDateString('ko-KR')}
+                  </span>
                 </td>
                 {tab !== 'all' && (
                   <td>
@@ -405,14 +416,14 @@ export default function PaymentsPage() {
       </div>
 
       {/* 페이지네이션 */}
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[#999]">페이지당</span>
+          <span className="text-xs sm:text-sm text-[#999]">페이지당</span>
           {[10, 20, 50].map(size => (
             <button
               key={size}
               onClick={() => { setPageSize(size); setPage(1); }}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`px-2.5 sm:px-3 py-1 rounded text-xs sm:text-sm ${
                 pageSize === size
                   ? 'bg-[#111] text-white'
                   : 'bg-white text-[#666] border border-[#e5e5e5] hover:bg-[#f5f5f5]'
@@ -427,17 +438,17 @@ export default function PaymentsPage() {
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={safePage <= 1}
-            className="px-3 py-1 rounded text-sm border border-[#e5e5e5] bg-white text-[#666] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 sm:px-3 py-1 rounded text-xs sm:text-sm border border-[#e5e5e5] bg-white text-[#666] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             이전
           </button>
-          <span className="text-sm text-[#666]">
+          <span className="text-xs sm:text-sm text-[#666]">
             {safePage} / {totalPages}
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={safePage >= totalPages}
-            className="px-3 py-1 rounded text-sm border border-[#e5e5e5] bg-white text-[#666] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 sm:px-3 py-1 rounded text-xs sm:text-sm border border-[#e5e5e5] bg-white text-[#666] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             다음
           </button>

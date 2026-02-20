@@ -65,7 +65,7 @@ export default function CheckPage() {
   };
 
   return (
-    <div className="max-w-xl mx-auto px-6 py-16">
+    <div className="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <h1 className="text-3xl font-bold mb-2 text-[#111]">접수 확인</h1>
       <p className="text-[#666] mb-10">이름과 전화번호로 접수 상태를 확인하세요.</p>
 
@@ -145,7 +145,7 @@ export default function CheckPage() {
                       {reg.payment_status === 'confirmed' ? '입금 확인' : '입금 대기'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-[#999]">학교</span>
                       <p className="text-[#111]">{reg.school}</p>

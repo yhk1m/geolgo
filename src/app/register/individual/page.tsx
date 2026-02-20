@@ -56,7 +56,7 @@ export default function IndividualRegisterPage() {
   };
 
   return (
-    <div className="max-w-xl mx-auto px-6 py-16">
+    <div className="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <h1 className="text-3xl font-bold mb-2 text-[#111]">개인 참가 신청</h1>
       <p className="text-[#666] mb-10">제26회 전국지리올림피아드 개인 접수</p>
 
@@ -97,7 +97,7 @@ export default function IndividualRegisterPage() {
 
         <div>
           <label className="block text-sm font-medium text-[#333] mb-1.5">
-            학교명 <span className="text-[#c00]">*</span>
+            학교명(반드시 학교 전체 명칭을 기입해주세요) <span className="text-[#c00]">*</span>
           </label>
           <input
             type="text"
@@ -109,7 +109,7 @@ export default function IndividualRegisterPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[#333] mb-1.5">
               학년 <span className="text-[#c00]">*</span>
@@ -172,7 +172,7 @@ export default function IndividualRegisterPage() {
           </button>
         </div>
 
-        <p className="text-xs text-[#999] text-center">
+        <p className="text-sm text-[#c00] text-center font-medium">
           신청 후 참가비 20,000원을 입금하셔야 접수가 완료됩니다.
         </p>
       </form>

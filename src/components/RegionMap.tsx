@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as echarts from 'echarts';
 import { regionNameMap, regionStudentsMap } from '@/lib/regions';
 
@@ -13,11 +13,37 @@ interface RegionMapProps {
   data: RegionData[];
 }
 
+const QUANTILE_COLORS = ['#e8e8e8', '#c6c6c6', '#999999', '#666666', '#333333'];
+
+function makeQuantilePieces(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = sorted.length;
+  const numClasses = QUANTILE_COLORS.length;
+  const breaks: number[] = [];
+  for (let i = 1; i < numClasses; i++) {
+    const idx = Math.round((i / numClasses) * n) - 1;
+    breaks.push(sorted[Math.min(idx, n - 1)]);
+  }
+  const pieces = [];
+  for (let i = 0; i < numClasses; i++) {
+    const min = i === 0 ? 0 : breaks[i - 1];
+    const max = i === numClasses - 1 ? sorted[n - 1] + 1 : breaks[i];
+    pieces.push({
+      min,
+      max,
+      color: QUANTILE_COLORS[i],
+      label: i === 0 ? `${max} 이하` : i === numClasses - 1 ? `${min} 이상` : `${min} ~ ${max}`,
+    });
+  }
+  return pieces;
+}
+
 export default function RegionMap({ data }: RegionMapProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [viewMode, setViewMode] = useState<'map-count' | 'map-rate' | 'bar'>('map-count');
   const [geoLoaded, setGeoLoaded] = useState(false);
+  const [scaleBar, setScaleBar] = useState({ width: 60, label: '100 km' });
 
   const sortedData = useMemo(
     () => [...data].sort((a, b) => a.value - b.value),
@@ -32,6 +58,31 @@ export default function RegionMap({ data }: RegionMapProps) {
       })),
     [sortedData]
   );
+
+  const updateScaleBar = useCallback(() => {
+    const chart = chartInstance.current;
+    if (!chart) return;
+
+    try {
+      const p1 = chart.convertToPixel({ seriesIndex: 0 }, [127, 36]);
+      const p2 = chart.convertToPixel({ seriesIndex: 0 }, [128, 36]);
+      if (!p1 || !p2) return;
+
+      const pixelPerDegree = Math.abs(p2[0] - p1[0]);
+      const kmPerPixel = 90 / pixelPerDegree;
+
+      const targetKm = kmPerPixel * 80;
+      const niceNumbers = [5, 10, 20, 50, 100, 200, 500];
+      const niceKm = niceNumbers.reduce((prev, curr) =>
+        Math.abs(curr - targetKm) < Math.abs(prev - targetKm) ? curr : prev
+      );
+
+      const barWidth = Math.round(niceKm / kmPerPixel);
+      setScaleBar({ width: barWidth, label: `${niceKm} km` });
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // 초기화 & GeoJSON 로드
   useEffect(() => {
@@ -55,12 +106,26 @@ export default function RegionMap({ data }: RegionMapProps) {
     };
   }, []);
 
-  // 차트 옵션 적용
+  // 메인 차트 옵션 적용
   useEffect(() => {
     if (!chartInstance.current || !geoLoaded) return;
 
-    const maxCount = Math.max(...sortedData.map(d => d.value), 1);
-    const maxRate = Math.max(...rateData.map(d => d.value), 1);
+    const chart = chartInstance.current;
+
+    const graticuleMarkLine = {
+      silent: true,
+      symbol: 'none',
+      lineStyle: { type: 'dashed' as const, color: 'rgba(0,0,0,0.12)', width: 0.8 },
+      label: { show: true, fontSize: 9, color: '#aaa', position: 'start' as const },
+      data: [
+        [{ name: '34°N', coord: [123, 34] }, { coord: [133, 34] }],
+        [{ name: '36°N', coord: [123, 36] }, { coord: [133, 36] }],
+        [{ name: '38°N', coord: [123, 38] }, { coord: [133, 38] }],
+        [{ name: '126°E', coord: [126, 32] }, { coord: [126, 40] }],
+        [{ name: '128°E', coord: [128, 32] }, { coord: [128, 40] }],
+        [{ name: '130°E', coord: [130, 32] }, { coord: [130, 40] }],
+      ],
+    };
 
     const mapBaseConfig = {
       roam: true,
@@ -83,6 +148,42 @@ export default function RegionMap({ data }: RegionMapProps) {
         itemStyle: { areaColor: '#333' },
         label: { color: '#fff' },
       },
+      markLine: graticuleMarkLine,
+    };
+
+    const makeDokdoMarkPoint = (tooltipText: string) => ({
+      symbol: 'circle',
+      symbolSize: 6,
+      itemStyle: { color: '#555', borderColor: '#fff', borderWidth: 1 },
+      emphasis: {
+        itemStyle: { color: '#333', borderColor: '#fff', borderWidth: 2 },
+        label: { color: '#fff', fontSize: 10, fontWeight: 'bold' as const },
+      },
+      tooltip: { formatter: () => tooltipText },
+      data: [
+        {
+          coord: [131.87, 37.24],
+          label: {
+            show: true,
+            formatter: '독도',
+            fontSize: 9,
+            color: '#333',
+            position: 'right' as const,
+            distance: 4,
+          },
+        },
+      ],
+    });
+
+    const countPieces = makeQuantilePieces(sortedData.map(d => d.value));
+    const ratePieces = makeQuantilePieces(rateData.map(d => d.value));
+
+    const visualMapBase = {
+      type: 'piecewise' as const,
+      right: 10,
+      bottom: 50,
+      textStyle: { color: '#666', fontSize: 11 },
+      selectedMode: false as const,
     };
 
     const mapCountOption: echarts.EChartsOption = {
@@ -95,15 +196,9 @@ export default function RegionMap({ data }: RegionMapProps) {
         },
       },
       visualMap: {
-        left: 'right',
-        min: 0,
-        max: maxCount,
-        inRange: {
-          color: ['#f5f5f5', '#d9d9d9', '#bfbfbf', '#999999', '#737373', '#4d4d4d', '#1a1a1a'],
-        },
+        ...visualMapBase,
+        pieces: countPieces,
         text: ['많음', '적음'],
-        textStyle: { color: '#666' },
-        calculable: true,
       },
       series: [
         {
@@ -113,6 +208,9 @@ export default function RegionMap({ data }: RegionMapProps) {
           animationDurationUpdate: 1000,
           universalTransition: true,
           data: sortedData,
+          markPoint: makeDokdoMarkPoint(
+            `<strong>경상북도</strong><br/>신청자: ${sortedData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
+          ),
         },
       ],
     };
@@ -127,15 +225,9 @@ export default function RegionMap({ data }: RegionMapProps) {
         },
       },
       visualMap: {
-        left: 'right',
-        min: 0,
-        max: maxRate,
-        inRange: {
-          color: ['#f5f5f5', '#d9d9d9', '#bfbfbf', '#999999', '#737373', '#4d4d4d', '#1a1a1a'],
-        },
+        ...visualMapBase,
+        pieces: ratePieces,
         text: ['높음', '낮음'],
-        textStyle: { color: '#666' },
-        calculable: true,
       },
       series: [
         {
@@ -145,6 +237,9 @@ export default function RegionMap({ data }: RegionMapProps) {
           animationDurationUpdate: 1000,
           universalTransition: true,
           data: rateData,
+          markPoint: makeDokdoMarkPoint(
+            `<strong>경상북도</strong><br/>만명당 신청률: ${rateData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
+          ),
         },
       ],
     };
@@ -211,10 +306,28 @@ export default function RegionMap({ data }: RegionMapProps) {
       'bar': barOption,
     };
 
-    // 차트 완전 초기화 후 새 옵션 적용
-    chartInstance.current.clear();
-    chartInstance.current.setOption(options[viewMode]);
-  }, [viewMode, geoLoaded, sortedData, rateData]);
+    chart.clear();
+    chart.setOption(options[viewMode]);
+
+    if (viewMode !== 'bar') {
+      setTimeout(updateScaleBar, 100);
+      chart.on('georoam', updateScaleBar);
+
+      // 독도 호버 시 경상북도 하이라이트
+      chart.on('mouseover', { componentType: 'markPoint' }, () => {
+        chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: 'Gyeongsangbuk-do' });
+      });
+      chart.on('mouseout', { componentType: 'markPoint' }, () => {
+        chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: 'Gyeongsangbuk-do' });
+      });
+    }
+
+    return () => {
+      chart.off('georoam', updateScaleBar);
+      chart.off('mouseover');
+      chart.off('mouseout');
+    };
+  }, [viewMode, geoLoaded, sortedData, rateData, updateScaleBar]);
 
   return (
     <div>
@@ -238,10 +351,39 @@ export default function RegionMap({ data }: RegionMapProps) {
         ))}
       </div>
 
-      <div
-        ref={chartRef}
-        style={{ width: '100%', height: viewMode === 'bar' ? '600px' : '500px' }}
-      />
+      <div className="relative">
+        <div
+          ref={chartRef}
+          style={{ width: '100%', height: viewMode === 'bar' ? '600px' : '500px' }}
+        />
+        {viewMode !== 'bar' && (
+          <>
+            {/* 방위표 (North Arrow) */}
+            <div className="absolute top-3 left-3 flex flex-col items-center bg-white/80 rounded px-2 py-1.5 border border-[#ddd]">
+              <span className="text-[11px] font-bold text-[#333] leading-none">N</span>
+              <svg width="14" height="24" viewBox="0 0 14 24" className="mt-0.5">
+                <polygon points="7,0 3,10 7,8 11,10" fill="#333" />
+                <polygon points="7,8 3,10 7,24 11,10" fill="#aaa" stroke="#999" strokeWidth="0.5" />
+              </svg>
+            </div>
+
+            {/* 축척 (Scale Bar) */}
+            <div className="absolute right-2 bottom-3 bg-white/80 rounded px-2 py-1.5 border border-[#ddd]">
+              <div className="flex items-end gap-0">
+                <div
+                  className="h-[4px] bg-[#333]"
+                  style={{
+                    width: `${scaleBar.width}px`,
+                    borderLeft: '1px solid #333',
+                    borderRight: '1px solid #333',
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-[#666] mt-0.5 block text-center">{scaleBar.label}</span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

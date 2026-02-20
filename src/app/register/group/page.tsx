@@ -153,7 +153,7 @@ export default function GroupRegisterPage() {
   const totalAmount = participants.length * 20000;
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-16">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <h1 className="text-3xl font-bold mb-2 text-[#111]">학교 단체 접수</h1>
       <p className="text-[#666] mb-10">지도교사가 학생들을 일괄 신청합니다.</p>
 
@@ -183,7 +183,7 @@ export default function GroupRegisterPage() {
             지도교사 정보
           </h2>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-[#333] mb-1.5">
                   교사명 <span className="text-[#c00]">*</span>
@@ -198,7 +198,7 @@ export default function GroupRegisterPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#333] mb-1.5">
-                  학교명 <span className="text-[#c00]">*</span>
+                  학교명(반드시 학교 전체 명칭을 기입해주세요) <span className="text-[#c00]">*</span>
                 </label>
                 <input
                   type="text"
@@ -209,7 +209,7 @@ export default function GroupRegisterPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-[#333] mb-1.5">
                   연락처 <span className="text-[#c00]">*</span>
@@ -308,43 +308,53 @@ export default function GroupRegisterPage() {
 
           <div className="space-y-3">
             {participants.map((p, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 bg-[#fafafa] rounded-lg border border-[#eee]">
-                <span className="text-xs text-[#999] w-6 shrink-0">{i + 1}</span>
-                <input
-                  type="text"
-                  value={p.name}
-                  onChange={e => updateParticipant(i, 'name', e.target.value)}
-                  required
-                  placeholder="이름"
-                  className="flex-1"
-                />
-                <select
-                  value={p.grade}
-                  onChange={e => updateParticipant(i, 'grade', e.target.value)}
-                  required
-                  className="w-24"
-                >
-                  <option value="">학년</option>
-                  <option value="1">1학년</option>
-                  <option value="2">2학년</option>
-                  <option value="3">3학년</option>
-                </select>
+              <div key={i} className="p-3 bg-[#fafafa] rounded-lg border border-[#eee]">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="text-xs text-[#999] w-5 shrink-0">{i + 1}</span>
+                  <input
+                    type="text"
+                    value={p.name}
+                    onChange={e => updateParticipant(i, 'name', e.target.value)}
+                    required
+                    placeholder="이름"
+                    className="flex-1 min-w-0"
+                  />
+                  <select
+                    value={p.grade}
+                    onChange={e => updateParticipant(i, 'grade', e.target.value)}
+                    required
+                    className="w-20 sm:w-24"
+                  >
+                    <option value="">학년</option>
+                    <option value="1">1학년</option>
+                    <option value="2">2학년</option>
+                    <option value="3">3학년</option>
+                  </select>
+                  <input
+                    type="tel"
+                    value={p.phone}
+                    onChange={e => updateParticipant(i, 'phone', e.target.value)}
+                    required
+                    placeholder="전화번호"
+                    className="flex-1 min-w-0 hidden sm:block"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeParticipant(i)}
+                    className="text-[#999] hover:text-[#c00] text-sm px-1 sm:px-2 shrink-0"
+                    disabled={participants.length <= 1}
+                  >
+                    삭제
+                  </button>
+                </div>
                 <input
                   type="tel"
                   value={p.phone}
                   onChange={e => updateParticipant(i, 'phone', e.target.value)}
                   required
                   placeholder="전화번호"
-                  className="w-40"
+                  className="mt-2 w-full sm:hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => removeParticipant(i)}
-                  className="text-[#999] hover:text-[#c00] text-sm px-2"
-                  disabled={participants.length <= 1}
-                >
-                  삭제
-                </button>
               </div>
             ))}
           </div>
@@ -366,6 +376,10 @@ export default function GroupRegisterPage() {
             {submitting ? '접수 중...' : `단체 접수 (${participants.length}명)`}
           </button>
         </div>
+
+        <p className="text-sm text-[#c00] text-center font-medium mt-4">
+          신청 후 참가비 20,000원을 입금하셔야 접수가 완료됩니다.
+        </p>
       </form>
     </div>
   );
