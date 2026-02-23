@@ -35,6 +35,14 @@ input, select, textarea {
   color: var(--foreground);
 }
 
+input[type="checkbox"],
+input[type="file"] {
+  width: auto;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: #333;

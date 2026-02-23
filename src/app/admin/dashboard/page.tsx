@@ -43,12 +43,15 @@ export default function AdminDashboard() {
         const { data } = await supabase
           .from('registrations')
           .select('*')
+          .neq('payment_status', 'deleted')
           .order('created_at', { ascending: false });
         all = data || [];
       } else {
-        all = getMockRegistrations().sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        all = getMockRegistrations()
+          .filter(r => r.payment_status !== 'deleted')
+          .sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
       }
 
       const confirmed = all.filter(r => r.payment_status === 'confirmed');

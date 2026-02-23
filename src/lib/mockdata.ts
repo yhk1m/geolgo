@@ -56,6 +56,13 @@ const REGION_WEIGHTS: Record<string, number> = {
   'Sejong-si': 3,
 };
 
+function randomBirthdate() {
+  const year = 2007 + Math.floor(Math.random() * 3); // 2007~2009
+  const month = Math.floor(Math.random() * 12) + 1;
+  const day = Math.floor(Math.random() * 28) + 1;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function generateMockRegistrations() {
   const registrations: {
     id: string;
@@ -67,9 +74,12 @@ export function generateMockRegistrations() {
     region: string;
     registration_type: 'individual' | 'group';
     group_id: string | null;
-    payment_status: 'pending' | 'confirmed';
+    payment_status: 'pending' | 'confirmed' | 'deleted';
     payment_amount: number;
     created_at: string;
+    birthdate: string | null;
+    photo_url: string | null;
+    is_deleted: boolean;
   }[] = [];
 
   let idCounter = 1;
@@ -98,6 +108,9 @@ export function generateMockRegistrations() {
         payment_status: Math.random() > 0.35 ? 'confirmed' : 'pending',
         payment_amount: 20000,
         created_at: date.toISOString(),
+        birthdate: randomBirthdate(),
+        photo_url: null,
+        is_deleted: false,
       });
     }
   }
@@ -121,4 +134,25 @@ export function updateMockPaymentStatus(ids: string[], status: 'pending' | 'conf
     const item = data.find(r => r.id === id);
     if (item) item.payment_status = status;
   });
+}
+
+export function softDeleteMockRegistrations(ids: string[]) {
+  const data = getMockRegistrations();
+  ids.forEach(id => {
+    const item = data.find(r => r.id === id);
+    if (item) (item as Record<string, unknown>).is_deleted = true;
+  });
+}
+
+export function restoreMockRegistrations(ids: string[]) {
+  const data = getMockRegistrations();
+  ids.forEach(id => {
+    const item = data.find(r => r.id === id);
+    if (item) (item as Record<string, unknown>).is_deleted = false;
+  });
+}
+
+export function permanentDeleteMockRegistrations(ids: string[]) {
+  if (!_cached) return;
+  _cached = _cached.filter(r => !ids.includes(r.id));
 }

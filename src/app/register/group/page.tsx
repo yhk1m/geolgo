@@ -7,7 +7,11 @@ import { REGIONS } from '@/lib/regions';
 interface Participant {
   name: string;
   grade: string;
+  classNum: string;
   phone: string;
+  birthdate: string;
+  photoFile: File | null;
+  photoPreview: string | null;
 }
 
 function parseCSV(text: string): Participant[] {
@@ -18,15 +22,19 @@ function parseCSV(text: string): Participant[] {
     const cols = lines[i].split(',').map(c => c.trim());
     // 헤더행 스킵
     if (i === 0 && (cols[0] === '이름' || cols[0].toLowerCase() === 'name')) continue;
-    if (cols.length < 3) continue;
+    if (cols.length < 4) continue;
 
-    const [name, grade, phone] = cols;
+    const name = cols[0];
+    const grade = cols[1];
+    const classNum = cols[2] || '';
+    const phone = cols[3];
+    const birthdate = cols[4] || '';
     if (!name || !grade || !phone) continue;
 
     const gradeNum = grade.replace(/[^0-9]/g, '');
     if (!['1', '2', '3'].includes(gradeNum)) continue;
 
-    results.push({ name, grade: gradeNum, phone });
+    results.push({ name, grade: gradeNum, classNum: classNum.trim(), phone, birthdate, photoFile: null, photoPreview: null });
   }
   return results;
 }
@@ -40,15 +48,16 @@ export default function GroupRegisterPage() {
     region: '',
   });
   const [participants, setParticipants] = useState<Participant[]>([
-    { name: '', grade: '', phone: '' },
+    { name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null },
   ]);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const [csvError, setCsvError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addParticipant = () => {
-    setParticipants(prev => [...prev, { name: '', grade: '', phone: '' }]);
+    setParticipants(prev => [...prev, { name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null }]);
   };
 
   const removeParticipant = (index: number) => {
@@ -56,10 +65,34 @@ export default function GroupRegisterPage() {
     setParticipants(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateParticipant = (index: number, field: keyof Participant, value: string) => {
+  const updateParticipant = (index: number, field: 'name' | 'grade' | 'classNum' | 'phone' | 'birthdate', value: string) => {
     setParticipants(prev =>
       prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
     );
+  };
+
+  const updateParticipantPhoto = (index: number, file: File | null) => {
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 업로드 가능합니다.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('파일 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setParticipants(prev =>
+          prev.map((p, i) => i === index ? { ...p, photoFile: file, photoPreview: ev.target?.result as string } : p)
+        );
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setParticipants(prev =>
+        prev.map((p, i) => i === index ? { ...p, photoFile: null, photoPreview: null } : p)
+      );
+    }
   };
 
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +120,7 @@ export default function GroupRegisterPage() {
 
   const downloadTemplate = () => {
     const bom = '\uFEFF';
-    const content = bom + '이름,학년,전화번호\n홍길동,1,010-1234-5678\n김철수,2,010-9876-5432\n';
+    const content = bom + '이름,학년,반,전화번호,생년월일\n홍길동,1,3,010-1234-5678,2008-03-15\n김철수,2,가,010-9876-5432,2007-11-20\n';
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -103,6 +136,21 @@ export default function GroupRegisterPage() {
     setResult(null);
 
     try {
+      // Upload all participant photos in parallel
+      const photoUrls = await Promise.all(
+        participants.map(async (p) => {
+          if (!p.photoFile) return null;
+          const ext = p.photoFile.name.split('.').pop();
+          const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from('photos')
+            .upload(fileName, p.photoFile);
+          if (uploadError) throw uploadError;
+          const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+          return urlData.publicUrl;
+        })
+      );
+
       const { data: groupData, error: groupError } = await supabase
         .from('groups')
         .insert({
@@ -118,11 +166,14 @@ export default function GroupRegisterPage() {
 
       if (groupError) throw groupError;
 
-      const registrations = participants.map(p => ({
+      const registrations = participants.map((p, i) => ({
         name: p.name,
         school: teacher.school,
         grade: parseInt(p.grade),
+        class_name: p.classNum,
         phone: p.phone,
+        birthdate: p.birthdate || null,
+        photo_url: photoUrls[i],
         region: teacher.region,
         registration_type: 'group',
         group_id: groupData.id,
@@ -139,7 +190,8 @@ export default function GroupRegisterPage() {
         message: `${teacher.school} 단체 접수가 완료되었습니다. (${participants.length}명, 총 ${total.toLocaleString()}원)`,
       });
       setTeacher({ name: '', phone: '', email: '', school: '', region: '' });
-      setParticipants([{ name: '', grade: '', phone: '' }]);
+      setParticipants([{ name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null }]);
+      setPrivacyConsent(false);
     } catch {
       setResult({
         success: false,
@@ -292,7 +344,7 @@ export default function GroupRegisterPage() {
                 />
               </label>
               <span className="text-xs text-[#999]">
-                양식: 이름, 학년, 전화번호 (첫 행은 헤더)
+                양식: 이름, 학년, 반, 전화번호, 생년월일 (첫 행은 헤더)
               </span>
             </div>
             {csvError && (
@@ -300,30 +352,29 @@ export default function GroupRegisterPage() {
             )}
             <div className="mt-3 text-xs text-[#999] bg-white rounded border border-[#eee] p-3 font-mono">
               <p className="text-[#666] mb-1">CSV 예시:</p>
-              <p>이름,학년,전화번호</p>
-              <p>홍길동,1,010-1234-5678</p>
-              <p>김철수,2,010-9876-5432</p>
+              <p>이름,학년,반,전화번호,생년월일</p>
+              <p>홍길동,1,3,010-1234-5678,2008-03-15</p>
+              <p>김철수,2,가,010-9876-5432,2007-11-20</p>
             </div>
           </div>
 
           <div className="space-y-3">
             {participants.map((p, i) => (
               <div key={i} className="p-3 bg-[#fafafa] rounded-lg border border-[#eee]">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <span className="text-xs text-[#999] w-5 shrink-0">{i + 1}</span>
+                {/* 1행: 번호, 이름, 학년, 반, 전화번호, 삭제 */}
+                <div className="grid grid-cols-[20px_1fr_72px_56px_auto] sm:grid-cols-[20px_1fr_80px_60px_1fr_auto] gap-2 items-center">
+                  <span className="text-xs text-[#999]">{i + 1}</span>
                   <input
                     type="text"
                     value={p.name}
                     onChange={e => updateParticipant(i, 'name', e.target.value)}
                     required
                     placeholder="이름"
-                    className="flex-1 min-w-0"
                   />
                   <select
                     value={p.grade}
                     onChange={e => updateParticipant(i, 'grade', e.target.value)}
                     required
-                    className="w-20 sm:w-24"
                   >
                     <option value="">학년</option>
                     <option value="1">1학년</option>
@@ -331,30 +382,107 @@ export default function GroupRegisterPage() {
                     <option value="3">3학년</option>
                   </select>
                   <input
+                    type="text"
+                    value={p.classNum}
+                    onChange={e => updateParticipant(i, 'classNum', e.target.value)}
+                    required
+                    placeholder="반"
+                  />
+                  <input
                     type="tel"
                     value={p.phone}
                     onChange={e => updateParticipant(i, 'phone', e.target.value)}
                     required
-                    placeholder="전화번호"
-                    className="flex-1 min-w-0 hidden sm:block"
+                    placeholder="010-0000-0000"
+                    className="hidden sm:block"
                   />
                   <button
                     type="button"
                     onClick={() => removeParticipant(i)}
-                    className="text-[#999] hover:text-[#c00] text-sm px-1 sm:px-2 shrink-0"
+                    className="text-[#999] hover:text-[#c00] text-sm px-1"
                     disabled={participants.length <= 1}
                   >
                     삭제
                   </button>
                 </div>
+                {/* 모바일 전화번호 */}
                 <input
                   type="tel"
                   value={p.phone}
                   onChange={e => updateParticipant(i, 'phone', e.target.value)}
                   required
-                  placeholder="전화번호"
-                  className="mt-2 w-full sm:hidden"
+                  placeholder="010-0000-0000"
+                  className="mt-2 sm:hidden"
                 />
+                {/* 2행: 생년월일 + 사진 */}
+                <div className="mt-2 grid grid-cols-[3fr_3fr_3fr_2fr] gap-1 items-center">
+                  <select
+                    value={p.birthdate ? p.birthdate.split('-')[0] : ''}
+                    onChange={e => {
+                      const parts = p.birthdate ? p.birthdate.split('-') : ['', '', ''];
+                      updateParticipant(i, 'birthdate', `${e.target.value}-${parts[1] || ''}-${parts[2] || ''}`);
+                    }}
+                    required
+                    className="text-sm"
+                  >
+                    <option value="">년</option>
+                    {[2010, 2009, 2008, 2007, 2006, 2005, 2004, 2003].map(y => (
+                      <option key={y} value={String(y)}>{y}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={p.birthdate ? p.birthdate.split('-')[1] : ''}
+                    onChange={e => {
+                      const parts = p.birthdate ? p.birthdate.split('-') : ['', '', ''];
+                      updateParticipant(i, 'birthdate', `${parts[0] || ''}-${e.target.value}-${parts[2] || ''}`);
+                    }}
+                    required
+                    className="text-sm"
+                  >
+                    <option value="">월</option>
+                    {Array.from({ length: 12 }, (_, j) => j + 1).map(m => (
+                      <option key={m} value={String(m).padStart(2, '0')}>{m}월</option>
+                    ))}
+                  </select>
+                  <select
+                    value={p.birthdate ? p.birthdate.split('-')[2] : ''}
+                    onChange={e => {
+                      const parts = p.birthdate ? p.birthdate.split('-') : ['', '', ''];
+                      updateParticipant(i, 'birthdate', `${parts[0] || ''}-${parts[1] || ''}-${e.target.value}`);
+                    }}
+                    required
+                    className="text-sm"
+                  >
+                    <option value="">일</option>
+                    {Array.from({ length: 31 }, (_, j) => j + 1).map(d => (
+                      <option key={d} value={String(d).padStart(2, '0')}>{d}일</option>
+                    ))}
+                  </select>
+                  <div className="relative">
+                    {p.photoPreview ? (
+                      <div className="relative w-[35px] h-[45px] rounded border border-[#ddd] overflow-hidden">
+                        <img src={p.photoPreview} alt="사진" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => updateParticipantPhoto(i, null)}
+                          className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#111] text-white rounded-full text-[10px] flex items-center justify-center hover:bg-[#c00]"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="block text-center text-[11px] text-[#888] bg-white border border-dashed border-[#ccc] rounded px-1 py-2.5 cursor-pointer hover:border-[#999] hover:text-[#666]">
+                        사진 첨부
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => updateParticipantPhoto(i, e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -368,6 +496,21 @@ export default function GroupRegisterPage() {
               {totalAmount.toLocaleString()}원
             </span>
           </div>
+
+          <div className="flex gap-2 mb-4">
+            <input
+              type="checkbox"
+              checked={privacyConsent}
+              onChange={e => setPrivacyConsent(e.target.checked)}
+              required
+              id="privacy-group"
+              className="w-4 h-4 mt-0.5 shrink-0 cursor-pointer"
+            />
+            <label htmlFor="privacy-group" className="text-sm text-[#333] leading-relaxed cursor-pointer">
+              <span className="text-[#c00]">[필수]</span> 전국지리올림피아드 참가 신청 및 대회 운영을 위한 개인정보를 수집 및 이용 동의 여부 (수집한 개인정보는 정보 주체의 동의 없이 수집한 목적 외로 사용하지 않으며, 대회 시상식 이후 폐기합니다.)
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={submitting}

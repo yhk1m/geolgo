@@ -15,6 +15,8 @@ interface Registration {
   payment_status: string;
   payment_amount: number;
   created_at: string;
+  birthdate: string | null;
+  photo_url: string | null;
 }
 
 export default function CheckPage() {
@@ -41,18 +43,18 @@ export default function CheckPage() {
       let matched: Registration[];
 
       if (isSupabaseConfigured) {
-        // 하이픈 포함/미포함 모두 검색
         const { data, error: queryError } = await supabase
           .from('registrations')
           .select('*')
-          .eq('name', name);
+          .eq('name', name)
+          .neq('payment_status', 'deleted');
         if (queryError) throw queryError;
         matched = (data || []).filter(
           r => normalize(r.phone) === normalize(phone)
         );
       } else {
         matched = getMockRegistrations().filter(
-          r => r.name === name && normalize(r.phone) === normalize(phone)
+          r => r.name === name && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted'
         );
       }
 
