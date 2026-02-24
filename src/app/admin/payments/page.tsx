@@ -286,6 +286,17 @@ export default function PaymentsPage() {
     }
   };
 
+  const allPageSelected = paged.length > 0 && paged.every(r => selected.has(r.id));
+  const allFilteredSelected = filtered.length > 0 && filtered.every(r => selected.has(r.id));
+
+  const selectAllFiltered = () => {
+    setSelected(new Set(filtered.map(r => r.id)));
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+  };
+
   const changeTab = (t: Tab) => {
     setTab(t);
     setPage(1);
@@ -657,6 +668,16 @@ export default function PaymentsPage() {
             </button>
           </div>
         )}
+        {tab === 'all' && selected.size > 0 && (
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <button
+              onClick={() => requestDelete(Array.from(selected))}
+              className="text-xs sm:text-sm px-4 py-1.5 text-white bg-[#c00] hover:bg-[#a00] rounded-md"
+            >
+              선택 삭제 ({selected.size}명)
+            </button>
+          </div>
+        )}
         {isTrashTab && selected.size > 0 && (
           <div className="flex items-center gap-2 sm:ml-auto">
             <button
@@ -674,6 +695,27 @@ export default function PaymentsPage() {
           </div>
         )}
       </div>
+
+      {/* 전체 선택 안내 배너 */}
+      {allPageSelected && filtered.length > paged.length && (
+        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-lg px-4 py-2.5 mb-3 text-sm text-center">
+          {allFilteredSelected ? (
+            <span className="text-[#333]">
+              필터된 전체 <strong>{filtered.length}명</strong>이 선택되었습니다.{' '}
+              <button onClick={clearSelection} className="text-[#c00] hover:underline font-medium ml-1">
+                선택 해제
+              </button>
+            </span>
+          ) : (
+            <span className="text-[#333]">
+              현재 페이지의 <strong>{paged.length}명</strong>이 선택되었습니다.{' '}
+              <button onClick={selectAllFiltered} className="text-[#111] hover:underline font-bold ml-1">
+                필터된 전체 {filtered.length}명 모두 선택
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 테이블 */}
       <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-x-auto">
