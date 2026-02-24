@@ -87,5 +87,23 @@ CREATE POLICY "Anyone can insert exam_locations"
 CREATE POLICY "Anyone can update exam_locations"
   ON exam_locations FOR UPDATE USING (true) WITH CHECK (true);
 
--- 6. 실시간 구독 활성화
+-- 6. 수정 로그 테이블
+CREATE TABLE edit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  registration_id UUID REFERENCES registrations(id) ON DELETE CASCADE,
+  changed_fields JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_edit_logs_registration ON edit_logs(registration_id);
+
+ALTER TABLE edit_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view edit_logs"
+  ON edit_logs FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert edit_logs"
+  ON edit_logs FOR INSERT WITH CHECK (true);
+
+-- 7. 실시간 구독 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE registrations;

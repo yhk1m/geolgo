@@ -27,6 +27,7 @@ interface Registration {
 
 export default function CheckPage() {
   const [name, setName] = useState('');
+  const [birthdate, setBirthdate] = useState('');
   const [phone, setPhone] = useState('');
   const [results, setResults] = useState<Registration[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -54,6 +55,7 @@ export default function CheckPage() {
           .from('registrations')
           .select('*')
           .eq('name', name)
+          .eq('birthdate', birthdate)
           .neq('payment_status', 'deleted');
         if (queryError) throw queryError;
         matched = (data || []).filter(
@@ -61,7 +63,7 @@ export default function CheckPage() {
         );
       } else {
         matched = getMockRegistrations().filter(
-          r => r.name === name && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted'
+          r => r.name === name && r.birthdate === birthdate && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted'
         ) as Registration[];
       }
 
@@ -121,7 +123,7 @@ export default function CheckPage() {
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <h1 className="text-3xl font-bold mb-2 text-[#111]">접수 확인</h1>
-      <p className="text-[#666] mb-10">이름과 전화번호로 접수 상태를 확인하세요.</p>
+      <p className="text-[#666] mb-10">이름, 생년월일, 전화번호로 접수 상태를 확인하세요.</p>
 
       {mockSamples.length > 0 && (
         <div className="mb-8 p-4 rounded-lg bg-[#f5f5f5] border border-[#e5e5e5] text-sm">
@@ -150,6 +152,15 @@ export default function CheckPage() {
             onChange={e => setName(e.target.value)}
             required
             placeholder="홍길동"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[#333] mb-1.5">생년월일</label>
+          <input
+            type="date"
+            value={birthdate}
+            onChange={e => setBirthdate(e.target.value)}
+            required
           />
         </div>
         <div>
@@ -182,7 +193,7 @@ export default function CheckPage() {
           {results.length === 0 ? (
             <div className="text-center py-12 text-[#999]">
               <p className="text-lg mb-2">접수 내역이 없습니다.</p>
-              <p className="text-sm">이름과 전화번호를 다시 확인해주세요.</p>
+              <p className="text-sm">이름, 생년월일, 전화번호를 다시 확인해주세요.</p>
             </div>
           ) : (
             <div className="space-y-4">

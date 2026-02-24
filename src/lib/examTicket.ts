@@ -240,19 +240,36 @@ export async function downloadExamTicketPDF(options: ExamTicketOptions) {
     // 개인정보 수집 동의
     y += 5;
     const privH = 40;
-    cell(mx, y, photoW, privH, '개인정보\n수집·이용', { bg: labelBg, fontSize: fs, align: 'center' });
+
+    // 레이블 셀
+    doc.setLineWidth(lineW);
+    doc.setFillColor(labelBg);
+    doc.rect(mx, y, photoW, privH, 'FD');
+    doc.setFont('NotoSansKR', 'normal');
+    doc.setFontSize(fs);
+    doc.setTextColor(0);
+    const labelGap = 5;
+    const labelFirstY = y + (privH - labelGap) / 2;
+    doc.text('개인정보', mx + photoW / 2, labelFirstY, { align: 'center', baseline: 'middle' });
+    doc.text('수집·이용', mx + photoW / 2, labelFirstY + labelGap, { align: 'center', baseline: 'middle' });
+
+    // 내용 셀
     doc.setLineWidth(lineW);
     doc.rect(mx + photoW, y, tw - photoW, privH);
     doc.setFontSize(8);
+    const privLines = [
+      '수집·이용 목적 : 전국지리올림피아드 운영관련 안내사항 통보',
+      '수집·이용할 항목 : 학교명, 학년반, 성명, 생년월일, 연락처',
+      '개인정보 보유·이용 기간 : 이용목적 달성시까지',
+      '동의를 거부할 권리가 있으며, 거부할 경우 전국지리올림피아드와 관련한 서비스를 제공받을 수 없음.',
+    ];
+    const privLineGap = 6;
+    const privBlockH = (privLines.length - 1) * privLineGap;
+    const privFirstY = y + (privH - privBlockH) / 2;
     const px = mx + photoW + 3;
-    let py = y + 8;
-    doc.text('수집·이용 목적 : 전국지리올림피아드 운영관련 안내사항 통보', px, py);
-    py += 6;
-    doc.text('수집·이용할 항목 : 학교명, 학년반, 성명, 생년월일, 연락처', px, py);
-    py += 6;
-    doc.text('개인정보 보유·이용 기간 : 이용목적 달성시까지', px, py);
-    py += 6;
-    doc.text('동의를 거부할 권리가 있으며, 거부할 경우 전국지리올림피아드와 관련한 서비스를 제공받을 수 없음.', px, py);
+    for (let li = 0; li < privLines.length; li++) {
+      doc.text(privLines[li], px, privFirstY + li * privLineGap, { baseline: 'middle' });
+    }
     y += privH;
 
     // 하단 안내문

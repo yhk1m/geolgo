@@ -60,7 +60,7 @@ export default function HomePage() {
           {[
             { label: '대회 방식', value: '선택형 27문항, 서술형 3세트' },
             { label: '참가 자격', value: '고등학교 재학생 중 희망 학생\n학교별 참가인원 제한 없음' },
-            { label: '참가비', value: '20,000원\n(사)대한지리학회 국민은행\n477401-01-176602' },
+            { label: '참가비', value: '20,000원\n(사)대한지리학회\n국민은행 477401-01-176602' },
             { label: '접수 방법', value: '본 사이트에서 참가신청서 제출\n참가비 입금 시 소속 고등학교와\n본인 이름으로 입금 (○○고 김○○)' },
           ].map((item, i) => (
             <div key={i} className="p-5 sm:p-6 rounded-lg border-[1.5px] border-[#c8c8c8] bg-[#fafafa] transition-all duration-200 hover:bg-[#111] hover:border-[#111] hover:text-white group cursor-default">

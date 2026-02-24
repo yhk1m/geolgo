@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 
@@ -23,6 +23,36 @@ export default function IndividualRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const isDirty = Object.values(form).some(v => v !== '') || birthYear !== '' || birthMonth !== '' || birthDay !== '' || photoFile !== null || privacyConsent;
+
+  useEffect(() => {
+    if (!isDirty || result?.success) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a');
+      if (!anchor?.href) return;
+      try {
+        if (new URL(anchor.href).origin !== window.location.origin) return;
+      } catch { return; }
+      if (!window.confirm('작성한 데이터가 지워집니다. 페이지를 떠나시겠습니까?')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleLinkClick, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleLinkClick, true);
+    };
+  }, [isDirty, result]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -55,6 +85,10 @@ export default function IndividualRegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!photoFile) {
+      alert('증명사진을 첨부해주세요.');
+      return;
+    }
     setSubmitting(true);
     setResult(null);
 
@@ -116,22 +150,49 @@ export default function IndividualRegisterPage() {
       <p className="text-[#666] mb-10">제26회 전국지리올림피아드 개인 접수</p>
 
       {result && (
-        <div className={`p-4 rounded-lg mb-8 text-sm ${
-          result.success
-            ? 'bg-[#f0f0f0] border border-[#ccc] text-[#111]'
-            : 'bg-[#fff0f0] border border-[#e5c5c5] text-[#c00]'
-        }`}>
-          {result.success && (
-            <div className="mb-3">
-              <p className="font-semibold mb-2">{result.message}</p>
-              <div className="p-3 bg-white rounded border border-[#ddd]">
-                <p className="text-xs text-[#999] mb-1">입금 계좌</p>
-                <p className="font-medium">(사)대한지리학회 국민은행 477401-01-176602</p>
-                <p className="text-xs text-[#999] mt-2">입금자명: 소속고 이름 (예: ○○고 김○○)</p>
-              </div>
-            </div>
-          )}
-          {!result.success && result.message}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => !result.success && setResult(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            {result.success ? (
+              <>
+                <div className="text-center mb-4">
+                  <div className="w-12 h-12 bg-[#f0f0f0] rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl">&#10003;</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#111]">접수 완료</h3>
+                </div>
+                <p className="text-sm text-[#333] mb-4 text-center">{result.message}</p>
+                <div className="p-3 bg-[#fafafa] rounded-lg border border-[#eee] mb-4">
+                  <p className="text-xs text-[#999] mb-1">입금 계좌</p>
+                  <p className="font-medium text-sm">(사)대한지리학회 국민은행 477401-01-176602</p>
+                  <p className="text-xs text-[#999] mt-2">입금자명: 소속고 이름 (예: ○○고 김○○)</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResult(null)}
+                  className="btn btn-primary w-full py-2.5"
+                >
+                  확인
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-4">
+                  <div className="w-12 h-12 bg-[#fff0f0] rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl text-[#c00]">!</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#c00]">오류 발생</h3>
+                </div>
+                <p className="text-sm text-[#333] mb-4 text-center">{result.message}</p>
+                <button
+                  type="button"
+                  onClick={() => setResult(null)}
+                  className="btn btn-secondary w-full py-2.5"
+                >
+                  닫기
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -258,7 +319,7 @@ export default function IndividualRegisterPage() {
 
         <div>
           <label className="block text-sm font-medium text-[#333] mb-1.5">
-            증명사진
+            증명사진 <span className="text-[#c00]">*</span>
           </label>
           <div className="flex items-start gap-4">
             <div>

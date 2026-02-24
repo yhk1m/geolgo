@@ -8,6 +8,8 @@ import { regionNameMap, regionShortMap, REGIONS } from '@/lib/regions';
 import { computeExamNumbers } from '@/lib/examNumber';
 import { downloadExamTicketPDF } from '@/lib/examTicket';
 import type { ExamLocationInfo } from '@/lib/examTicket';
+import { downloadPhotoRosterPDF } from '@/lib/photoRoster';
+import type { RosterEntry } from '@/lib/photoRoster';
 import * as XLSX from 'xlsx';
 
 interface Registration {
@@ -25,6 +27,30 @@ interface Registration {
   birthdate: string | null;
   photo_url: string | null;
   class_name?: string | null;
+  group_id?: string | null;
+}
+
+interface TeacherInfo {
+  teacher_name: string;
+  teacher_phone: string;
+  teacher_email: string | null;
+}
+
+interface EditLog {
+  id: string;
+  changed_fields: Record<string, { old: string; new: string }>;
+  created_at: string;
+}
+
+interface EditDraft {
+  name: string;
+  school: string;
+  grade: string;
+  class_name: string;
+  phone: string;
+  email: string;
+  birthdate: string;
+  region: string;
 }
 
 type Tab = 'all' | 'pending' | 'confirmed' | 'trash';
@@ -64,6 +90,19 @@ export default function PaymentsPage() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [examLocations, setExamLocations] = useState<Record<string, ExamLocationInfo>>({});
   const [locationDraft, setLocationDraft] = useState<Record<string, ExamLocationInfo>>({});
+  const [showRosterModal, setShowRosterModal] = useState(false);
+  const [rosterRegion, setRosterRegion] = useState('');
+  const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Registration | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [teacherLoading, setTeacherLoading] = useState(false);
+  const [editLogs, setEditLogs] = useState<EditLog[]>([]);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<Registration | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -421,11 +460,166 @@ export default function PaymentsPage() {
     XLSX.writeFile(wb, `지리올림피아드_${label}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  async function handleDownloadRoster() {
+    if (!rosterRegion) return;
+    const regionStudents = confirmed
+      .filter(r => r.region === rosterRegion)
+      .sort((a, b) => {
+        const numA = examNumbers.get(a.id) || '';
+        const numB = examNumbers.get(b.id) || '';
+        return numA.localeCompare(numB);
+      });
+
+    const entries: RosterEntry[] = regionStudents.map(r => ({
+      examNumber: examNumbers.get(r.id) || '',
+      school: shortenSchool(r.school),
+      name: r.name,
+      birthdate: r.birthdate || '',
+      photo_url: r.photo_url,
+    }));
+
+    const name = regionShortMap[rosterRegion] || regionNameMap[rosterRegion] || rosterRegion;
+    await downloadPhotoRosterPDF(entries, name);
+    setShowRosterModal(false);
+  }
+
+  async function handleShowDetail(r: Registration) {
+    setDetailTarget(r);
+    setShowDetailModal(true);
+    setTeacherInfo(null);
+    setEditLogs([]);
+    // 수정 로그 조회
+    if (isSupabaseConfigured) {
+      try {
+        const { data: logs } = await supabase
+          .from('edit_logs')
+          .select('*')
+          .eq('registration_id', r.id)
+          .order('created_at', { ascending: false });
+        if (logs) setEditLogs(logs);
+      } catch { /* ignore */ }
+    }
+    if (r.registration_type === 'group' && r.group_id) {
+      setTeacherLoading(true);
+      try {
+        if (isSupabaseConfigured) {
+          const { data } = await supabase
+            .from('groups')
+            .select('teacher_name, teacher_phone, teacher_email')
+            .eq('id', r.group_id)
+            .single();
+          if (data) setTeacherInfo(data);
+        }
+      } catch {
+        // error
+      } finally {
+        setTeacherLoading(false);
+      }
+    }
+  }
+
+  function openEditModal(r: Registration) {
+    setEditTarget(r);
+    setEditDraft({
+      name: r.name,
+      school: r.school,
+      grade: String(r.grade),
+      class_name: r.class_name || '',
+      phone: r.phone,
+      email: r.email || '',
+      birthdate: r.birthdate || '',
+      region: r.region,
+    });
+    setEditPhotoFile(null);
+    setEditPhotoPreview(r.photo_url || null);
+    setShowEditModal(true);
+  }
+
+  function handleEditPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('이미지 파일만 업로드 가능합니다.'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert('파일 크기는 5MB 이하여야 합니다.'); return; }
+    setEditPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setEditPhotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveEdit() {
+    if (!editTarget || !editDraft) return;
+    setEditSaving(true);
+    try {
+      const fieldLabels: Record<string, string> = {
+        name: '이름', school: '학교', grade: '학년', class_name: '반',
+        phone: '전화번호', email: '이메일', birthdate: '생년월일', region: '지역',
+      };
+      const changes: Record<string, { old: string; new: string }> = {};
+      const updates: Record<string, string | number | null> = {};
+
+      for (const key of Object.keys(editDraft) as (keyof EditDraft)[]) {
+        const oldVal = key === 'grade' ? String(editTarget.grade)
+          : key === 'class_name' ? (editTarget.class_name || '')
+          : key === 'email' ? (editTarget.email || '')
+          : key === 'birthdate' ? (editTarget.birthdate || '')
+          : (editTarget as unknown as Record<string, string>)[key] || '';
+        const newVal = editDraft[key];
+        if (oldVal !== newVal) {
+          changes[fieldLabels[key] || key] = { old: oldVal, new: newVal };
+          if (key === 'grade') updates[key] = parseInt(newVal);
+          else if (key === 'email' || key === 'birthdate' || key === 'class_name') updates[key] = newVal || null;
+          else updates[key] = newVal;
+        }
+      }
+
+      // 사진 변경 처리
+      if (editPhotoFile && isSupabaseConfigured) {
+        const ext = editPhotoFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('photos').upload(fileName, editPhotoFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+        updates.photo_url = urlData.publicUrl;
+        changes['사진'] = { old: editTarget.photo_url ? '(기존 사진)' : '(없음)', new: '(새 사진)' };
+      }
+
+      if (Object.keys(changes).length === 0) {
+        setShowEditModal(false);
+        return;
+      }
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from('registrations')
+          .update(updates)
+          .eq('id', editTarget.id);
+        if (error) throw error;
+
+        await supabase.from('edit_logs').insert({
+          registration_id: editTarget.id,
+          changed_fields: changes,
+        });
+      }
+
+      setData(prev => prev.map(r => r.id === editTarget.id ? { ...r, ...updates } as Registration : r));
+      setShowEditModal(false);
+      alert('수정이 완료되었습니다.');
+    } catch {
+      alert('수정 중 오류가 발생했습니다.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   async function handleDownloadPDF(targets?: Registration[]) {
     const list = targets || data;
-    if (list.length === 0) return;
+    const confirmed = list.filter(r => r.payment_status === 'confirmed');
+    if (confirmed.length === 0) {
+      alert('입금 확인된 참가자가 없습니다.');
+      return;
+    }
     await downloadExamTicketPDF({
-      registrations: list,
+      registrations: confirmed,
       examNumbers,
       examLocations,
     });
@@ -436,6 +630,12 @@ export default function PaymentsPage() {
   return (
     <div>
       <div className="flex items-center justify-end gap-2 mb-6 flex-wrap">
+        <button
+          onClick={() => { setRosterRegion(''); setShowRosterModal(true); }}
+          className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-lg"
+        >
+          명렬표 저장
+        </button>
         <button
           onClick={openLocationModal}
           className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-lg"
@@ -658,11 +858,17 @@ export default function PaymentsPage() {
                     className="w-4 h-4"
                   />
                 </td>
-                <td className="text-xs text-[#666] font-mono whitespace-nowrap">{examNumbers.get(r.id) || '-'}</td>
-                <td className="font-medium text-[#111] whitespace-nowrap">{r.name}</td>
+                <td className="text-xs text-[#666] font-mono whitespace-nowrap">
+                  <button type="button" onClick={() => handleShowDetail(r)} className="hover:underline hover:text-blue-600 cursor-pointer">{examNumbers.get(r.id) || '-'}</button>
+                </td>
+                <td className="font-medium text-[#111] whitespace-nowrap">
+                  <button type="button" onClick={() => handleShowDetail(r)} className="hover:underline hover:text-blue-600 cursor-pointer">{r.name}</button>
+                </td>
                 <td>
-                  <span className="sm:hidden">{shortenSchool(r.school)}</span>
-                  <span className="hidden sm:inline">{r.school}</span>
+                  <button type="button" onClick={() => handleShowDetail(r)} className="hover:underline hover:text-blue-600 cursor-pointer text-left">
+                    <span className="sm:hidden">{shortenSchool(r.school)}</span>
+                    <span className="hidden sm:inline">{r.school}</span>
+                  </button>
                 </td>
                 <td>
                   <span className="sm:hidden">{regionShortMap[r.region] || r.region}</span>
@@ -704,11 +910,17 @@ export default function PaymentsPage() {
                               onClick={() => revertPayment(r.id)}
                               className="px-3 py-1 text-xs font-medium text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#ddd] rounded"
                             >
-                              취소
+                              입금 확인 취소
                             </button>
                           )}
                         </>
                       )}
+                      <button
+                        onClick={() => openEditModal(r)}
+                        className="px-3 py-1 text-xs font-medium text-blue-600 bg-white hover:bg-blue-50 border border-blue-200 rounded"
+                      >
+                        수정
+                      </button>
                       <button
                         onClick={() => requestDelete([r.id])}
                         className="px-3 py-1 text-xs font-medium text-[#c00] bg-white hover:bg-[#fff0f0] border border-[#e5c5c5] rounded"
@@ -809,6 +1021,222 @@ export default function PaymentsPage() {
                 className="px-4 py-2 text-sm text-white bg-[#c00] rounded-md hover:bg-[#a00]"
               >
                 {deleteMode === 'permanent' ? '영구 삭제' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 참가자 상세 모달 */}
+      {showDetailModal && detailTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDetailModal(false)}>
+          <div className="bg-white rounded-xl p-6 w-[360px] shadow-xl mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4 text-[#111]">참가자 정보</h3>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">이름</span>
+                <span className="text-[#111] font-medium">{detailTarget.name}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">생년월일</span>
+                <span className="text-[#111]">{detailTarget.birthdate || '-'}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">전화번호</span>
+                <span className="text-[#111]">{detailTarget.phone}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">이메일</span>
+                <span className="text-[#111]">{detailTarget.email || '-'}</span>
+              </div>
+            </div>
+            {detailTarget.registration_type === 'group' && (
+              <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
+                <h4 className="text-lg font-semibold text-[#111] mb-3">지도교사 정보</h4>
+                {teacherLoading ? (
+                  <p className="text-sm text-[#999]">로딩 중...</p>
+                ) : teacherInfo ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-[72px_1fr] gap-1">
+                      <span className="text-[#999]">이름</span>
+                      <span className="text-[#111] font-medium">{teacherInfo.teacher_name}</span>
+                    </div>
+                    <div className="grid grid-cols-[72px_1fr] gap-1">
+                      <span className="text-[#999]">전화번호</span>
+                      <span className="text-[#111]">{teacherInfo.teacher_phone}</span>
+                    </div>
+                    <div className="grid grid-cols-[72px_1fr] gap-1">
+                      <span className="text-[#999]">이메일</span>
+                      <span className="text-[#111]">{teacherInfo.teacher_email || '-'}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#999]">교사 정보를 불러올 수 없습니다.</p>
+                )}
+              </div>
+            )}
+            {editLogs.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
+                <h4 className="text-lg font-semibold text-[#111] mb-3">수정 이력</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {editLogs.map(log => (
+                    <div key={log.id} className="p-2 bg-[#fafafa] rounded border border-[#eee] text-xs">
+                      <p className="text-[#999] mb-1">{new Date(log.created_at).toLocaleString('ko-KR')}</p>
+                      {Object.entries(log.changed_fields).map(([field, val]) => (
+                        <p key={field} className="text-[#333]">
+                          <span className="font-medium">{field}</span>: <span className="text-[#c00] line-through">{val.old || '(없음)'}</span> → <span className="text-blue-600">{val.new || '(없음)'}</span>
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowDetailModal(false)}
+              className="mt-5 w-full py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-lg hover:bg-[#f5f5f5]"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 수정 모달 */}
+      {showEditModal && editDraft && editTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-[400px] shadow-xl mx-4 max-h-[85vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-[#111]">참가자 정보 수정</h3>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-[#999] mb-1">이름</label>
+                <input type="text" value={editDraft.name} onChange={e => setEditDraft({ ...editDraft, name: e.target.value })} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">학교</label>
+                <input type="text" value={editDraft.school} onChange={e => setEditDraft({ ...editDraft, school: e.target.value })} className="w-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#999] mb-1">학년</label>
+                  <select value={editDraft.grade} onChange={e => setEditDraft({ ...editDraft, grade: e.target.value })} className="w-full">
+                    <option value="1">1학년</option>
+                    <option value="2">2학년</option>
+                    <option value="3">3학년</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[#999] mb-1">반</label>
+                  <input type="text" value={editDraft.class_name} onChange={e => setEditDraft({ ...editDraft, class_name: e.target.value })} className="w-full" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">전화번호</label>
+                <input type="tel" value={editDraft.phone} onChange={e => setEditDraft({ ...editDraft, phone: e.target.value })} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">이메일</label>
+                <input type="email" value={editDraft.email} onChange={e => setEditDraft({ ...editDraft, email: e.target.value })} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">생년월일</label>
+                <input type="date" value={editDraft.birthdate} onChange={e => setEditDraft({ ...editDraft, birthdate: e.target.value })} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">지역</label>
+                <select value={editDraft.region} onChange={e => setEditDraft({ ...editDraft, region: e.target.value })} className="w-full">
+                  {REGIONS.map(r => (
+                    <option key={r.nameEn} value={r.nameEn}>{regionNameMap[r.nameEn] || r.nameKo}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[#999] mb-1">사진</label>
+                <div className="flex items-center gap-3">
+                  {editPhotoPreview ? (
+                    <div className="relative w-[45px] h-[60px] rounded border border-[#ddd] overflow-hidden shrink-0">
+                      <img src={editPhotoPreview} alt="사진" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => { setEditPhotoFile(null); setEditPhotoPreview(null); }}
+                        className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#111] text-white rounded-full text-[10px] flex items-center justify-center hover:bg-[#c00]"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-[45px] h-[60px] rounded border border-dashed border-[#ccc] flex items-center justify-center text-[10px] text-[#999] shrink-0">
+                      없음
+                    </div>
+                  )}
+                  <label className="px-3 py-1.5 text-xs text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded cursor-pointer">
+                    사진 변경
+                    <input type="file" accept="image/*" onChange={handleEditPhotoChange} className="hidden" />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-lg hover:bg-[#f5f5f5]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="flex-1 py-2 text-sm text-white bg-[#111] rounded-lg hover:bg-[#333] disabled:opacity-50"
+              >
+                {editSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 명렬표 저장 모달 */}
+      {showRosterModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[400px] shadow-xl">
+            <h3 className="text-lg font-bold mb-4 text-[#111]">명렬표 저장</h3>
+            <label className="block text-sm font-medium text-[#333] mb-1.5">지역 선택</label>
+            <select
+              value={rosterRegion}
+              onChange={e => setRosterRegion(e.target.value)}
+              className="w-full text-sm mb-4"
+            >
+              <option value="">지역을 선택하세요</option>
+              {REGIONS.map(r => {
+                const count = confirmed.filter(reg => reg.region === r.nameEn).length;
+                return (
+                  <option key={r.nameEn} value={r.nameEn}>
+                    {regionShortMap[r.nameEn] || r.nameKo} ({count}명)
+                  </option>
+                );
+              })}
+            </select>
+            {rosterRegion && (
+              <p className="text-sm text-[#666] mb-4">
+                입금 확인된 {confirmed.filter(r => r.region === rosterRegion).length}명의 명렬표를 생성합니다.
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowRosterModal(false)}
+                className="px-4 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-md hover:bg-[#f5f5f5]"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDownloadRoster}
+                disabled={!rosterRegion}
+                className="px-4 py-2 text-sm text-white bg-[#111] rounded-md hover:bg-[#333] disabled:opacity-40"
+              >
+                다운로드
               </button>
             </div>
           </div>

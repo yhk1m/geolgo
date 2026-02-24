@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 
@@ -9,9 +9,40 @@ interface Participant {
   grade: string;
   classNum: string;
   phone: string;
+  email: string;
   birthdate: string;
   photoFile: File | null;
   photoPreview: string | null;
+}
+
+interface PhotoConflict {
+  file: File;
+  preview: string;
+  name: string;
+  matchingIndices: number[];
+}
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
+function normalizeBirthdate(raw: string): string {
+  if (!raw) return '';
+  // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  const match = raw.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if (match) {
+    return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  }
+  // YYYYMMDD
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) {
+    return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  }
+  return '';
 }
 
 function parseCSV(text: string): Participant[] {
@@ -28,13 +59,14 @@ function parseCSV(text: string): Participant[] {
     const grade = cols[1];
     const classNum = cols[2] || '';
     const phone = cols[3];
-    const birthdate = cols[4] || '';
+    const birthdate = normalizeBirthdate(cols[4] || '');
+    const email = cols[5] || '';
     if (!name || !grade || !phone) continue;
 
     const gradeNum = grade.replace(/[^0-9]/g, '');
     if (!['1', '2', '3'].includes(gradeNum)) continue;
 
-    results.push({ name, grade: gradeNum, classNum: classNum.trim(), phone, birthdate, photoFile: null, photoPreview: null });
+    results.push({ name, grade: gradeNum, classNum: classNum.trim(), phone, email: email.trim(), birthdate, photoFile: null, photoPreview: null });
   }
   return results;
 }
@@ -48,24 +80,56 @@ export default function GroupRegisterPage() {
     region: '',
   });
   const [participants, setParticipants] = useState<Participant[]>([
-    { name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null },
+    { name: '', grade: '', classNum: '', phone: '', email: '', birthdate: '', photoFile: null, photoPreview: null },
   ]);
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const [csvError, setCsvError] = useState('');
+  const [photoConflicts, setPhotoConflicts] = useState<PhotoConflict[]>([]);
+  const [showPhotoConflictModal, setShowPhotoConflictModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkPhotoRef = useRef<HTMLInputElement>(null);
+
+  const isDirty = Object.values(teacher).some(v => v !== '') || participants.some(p => p.name !== '' || p.grade !== '' || p.phone !== '' || p.birthdate !== '' || p.photoFile !== null) || privacyConsent;
+
+  useEffect(() => {
+    if (!isDirty || result?.success) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a');
+      if (!anchor?.href) return;
+      try {
+        if (new URL(anchor.href).origin !== window.location.origin) return;
+      } catch { return; }
+      if (!window.confirm('작성한 데이터가 지워집니다. 페이지를 떠나시겠습니까?')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleLinkClick, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleLinkClick, true);
+    };
+  }, [isDirty, result]);
 
   const addParticipant = () => {
-    setParticipants(prev => [...prev, { name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null }]);
+    setParticipants(prev => [...prev, { name: '', grade: '', classNum: '', phone: '', email: '', birthdate: '', photoFile: null, photoPreview: null }]);
   };
 
   const removeParticipant = (index: number) => {
-    if (participants.length <= 1) return;
     setParticipants(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateParticipant = (index: number, field: 'name' | 'grade' | 'classNum' | 'phone' | 'birthdate', value: string) => {
+  const updateParticipant = (index: number, field: 'name' | 'grade' | 'classNum' | 'phone' | 'email' | 'birthdate', value: string) => {
     setParticipants(prev =>
       prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
     );
@@ -118,9 +182,60 @@ export default function GroupRegisterPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleBulkPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const conflicts: PhotoConflict[] = [];
+    const newParticipants = [...participants];
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+      if (file.size > 5 * 1024 * 1024) continue;
+
+      const name = file.name.replace(/\.[^.]+$/, '').trim();
+      const matchingIndices = newParticipants
+        .map((p, i) => p.name.trim() === name ? i : -1)
+        .filter(i => i !== -1);
+
+      if (matchingIndices.length === 1) {
+        const preview = await readFileAsDataURL(file);
+        newParticipants[matchingIndices[0]] = {
+          ...newParticipants[matchingIndices[0]],
+          photoFile: file,
+          photoPreview: preview,
+        };
+      } else if (matchingIndices.length > 1) {
+        const preview = await readFileAsDataURL(file);
+        conflicts.push({ file, preview, name, matchingIndices });
+      }
+    }
+
+    setParticipants(newParticipants);
+
+    if (conflicts.length > 0) {
+      setPhotoConflicts(conflicts);
+      setShowPhotoConflictModal(true);
+    }
+
+    if (bulkPhotoRef.current) bulkPhotoRef.current.value = '';
+  };
+
+  const resolvePhotoConflict = (conflictIndex: number, participantIndex: number) => {
+    const conflict = photoConflicts[conflictIndex];
+    setParticipants(prev =>
+      prev.map((p, i) => i === participantIndex ? { ...p, photoFile: conflict.file, photoPreview: conflict.preview } : p)
+    );
+    const remaining = photoConflicts.filter((_, i) => i !== conflictIndex);
+    setPhotoConflicts(remaining);
+    if (remaining.length === 0) {
+      setShowPhotoConflictModal(false);
+    }
+  };
+
   const downloadTemplate = () => {
     const bom = '\uFEFF';
-    const content = bom + '이름,학년,반,전화번호,생년월일\n홍길동,1,3,010-1234-5678,2008-03-15\n김철수,2,가,010-9876-5432,2007-11-20\n';
+    const content = bom + '이름,학년,반,전화번호,생년월일,이메일\n홍길동,1,3,010-1234-5678,2008-03-15,hong@email.com\n김철수,2,가,010-9876-5432,2007-11-20,kim@email.com\n';
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -132,6 +247,11 @@ export default function GroupRegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const missingPhoto = participants.filter(p => !p.photoFile);
+    if (missingPhoto.length > 0) {
+      alert(`사진이 첨부되지 않은 학생이 ${missingPhoto.length}명 있습니다. 모든 학생의 사진을 첨부해주세요.`);
+      return;
+    }
     setSubmitting(true);
     setResult(null);
 
@@ -172,6 +292,7 @@ export default function GroupRegisterPage() {
         grade: parseInt(p.grade),
         class_name: p.classNum,
         phone: p.phone,
+        email: p.email || null,
         birthdate: p.birthdate || null,
         photo_url: photoUrls[i],
         region: teacher.region,
@@ -190,7 +311,7 @@ export default function GroupRegisterPage() {
         message: `${teacher.school} 단체 접수가 완료되었습니다. (${participants.length}명, 총 ${total.toLocaleString()}원)`,
       });
       setTeacher({ name: '', phone: '', email: '', school: '', region: '' });
-      setParticipants([{ name: '', grade: '', classNum: '', phone: '', birthdate: '', photoFile: null, photoPreview: null }]);
+      setParticipants([{ name: '', grade: '', classNum: '', phone: '', email: '', birthdate: '', photoFile: null, photoPreview: null }]);
       setPrivacyConsent(false);
     } catch {
       setResult({
@@ -210,21 +331,49 @@ export default function GroupRegisterPage() {
       <p className="text-[#666] mb-10">지도교사가 학생들을 일괄 신청합니다.</p>
 
       {result && (
-        <div className={`p-4 rounded-lg mb-8 text-sm ${
-          result.success
-            ? 'bg-[#f0f0f0] border border-[#ccc] text-[#111]'
-            : 'bg-[#fff0f0] border border-[#e5c5c5] text-[#c00]'
-        }`}>
-          {result.success ? (
-            <div>
-              <p className="font-semibold mb-2">{result.message}</p>
-              <div className="p-3 bg-white rounded border border-[#ddd]">
-                <p className="text-xs text-[#999] mb-1">입금 계좌</p>
-                <p className="font-medium">(사)대한지리학회 국민은행 477401-01-176602</p>
-                <p className="text-xs text-[#999] mt-2">입금자명: 학교명 (예: ○○고)</p>
-              </div>
-            </div>
-          ) : result.message}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => !result.success && setResult(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            {result.success ? (
+              <>
+                <div className="text-center mb-4">
+                  <div className="w-12 h-12 bg-[#f0f0f0] rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl">&#10003;</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#111]">접수 완료</h3>
+                </div>
+                <p className="text-sm text-[#333] mb-4 text-center">{result.message}</p>
+                <div className="p-3 bg-[#fafafa] rounded-lg border border-[#eee] mb-4">
+                  <p className="text-xs text-[#999] mb-1">입금 계좌</p>
+                  <p className="font-medium text-sm">(사)대한지리학회 국민은행 477401-01-176602</p>
+                  <p className="text-xs text-[#999] mt-2">입금자명: 학교명 (예: ○○고)</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResult(null)}
+                  className="btn btn-primary w-full py-2.5"
+                >
+                  확인
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-4">
+                  <div className="w-12 h-12 bg-[#fff0f0] rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl text-[#c00]">!</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#c00]">오류 발생</h3>
+                </div>
+                <p className="text-sm text-[#333] mb-4 text-center">{result.message}</p>
+                <button
+                  type="button"
+                  onClick={() => setResult(null)}
+                  className="btn btn-secondary w-full py-2.5"
+                >
+                  닫기
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -311,13 +460,26 @@ export default function GroupRegisterPage() {
             <h2 className="text-lg font-semibold text-[#111]">
               참가 학생 ({participants.length}명)
             </h2>
-            <button
-              type="button"
-              onClick={addParticipant}
-              className="btn btn-secondary text-sm px-4 py-1.5"
-            >
-              + 학생 추가
-            </button>
+            <div className="flex gap-2">
+              <label className="btn btn-secondary text-sm px-4 py-1.5 cursor-pointer">
+                사진 일괄 업로드
+                <input
+                  ref={bulkPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleBulkPhotoUpload}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={addParticipant}
+                className="btn btn-secondary text-sm px-4 py-1.5"
+              >
+                + 학생 추가
+              </button>
+            </div>
           </div>
 
           {/* CSV 업로드 */}
@@ -344,7 +506,7 @@ export default function GroupRegisterPage() {
                 />
               </label>
               <span className="text-xs text-[#999]">
-                양식: 이름, 학년, 반, 전화번호, 생년월일 (첫 행은 헤더)
+                양식: 이름, 학년, 반, 전화번호, 생년월일, 이메일 (첫 행은 헤더)
               </span>
             </div>
             {csvError && (
@@ -352,17 +514,17 @@ export default function GroupRegisterPage() {
             )}
             <div className="mt-3 text-xs text-[#999] bg-white rounded border border-[#eee] p-3 font-mono">
               <p className="text-[#666] mb-1">CSV 예시:</p>
-              <p>이름,학년,반,전화번호,생년월일</p>
-              <p>홍길동,1,3,010-1234-5678,2008-03-15</p>
-              <p>김철수,2,가,010-9876-5432,2007-11-20</p>
+              <p>이름,학년,반,전화번호,생년월일,이메일</p>
+              <p>홍길동,1,3,010-1234-5678,2008-03-15,hong@email.com</p>
+              <p>김철수,2,가,010-9876-5432,2007-11-20,kim@email.com</p>
             </div>
           </div>
 
           <div className="space-y-3">
             {participants.map((p, i) => (
               <div key={i} className="p-3 bg-[#fafafa] rounded-lg border border-[#eee]">
-                {/* 1행: 번호, 이름, 학년, 반, 전화번호, 삭제 */}
-                <div className="grid grid-cols-[20px_1fr_72px_56px_auto] sm:grid-cols-[20px_1fr_80px_60px_1fr_auto] gap-2 items-center">
+                {/* 1행: 번호, 이름, 학년, 반, 전화번호, 이메일, 삭제 */}
+                <div className="grid grid-cols-[20px_1fr_72px_56px_auto] sm:grid-cols-[20px_1fr_80px_50px_1fr_1fr_auto] gap-2 items-center">
                   <span className="text-xs text-[#999]">{i + 1}</span>
                   <input
                     type="text"
@@ -396,25 +558,39 @@ export default function GroupRegisterPage() {
                     placeholder="010-0000-0000"
                     className="hidden sm:block"
                   />
+                  <input
+                    type="email"
+                    value={p.email}
+                    onChange={e => updateParticipant(i, 'email', e.target.value)}
+                    placeholder="이메일"
+                    className="hidden sm:block text-sm"
+                  />
                   <button
                     type="button"
                     onClick={() => removeParticipant(i)}
                     className="text-[#999] hover:text-[#c00] text-sm px-1"
-                    disabled={participants.length <= 1}
                   >
                     삭제
                   </button>
                 </div>
-                {/* 모바일 전화번호 */}
-                <input
-                  type="tel"
-                  value={p.phone}
-                  onChange={e => updateParticipant(i, 'phone', e.target.value)}
-                  required
-                  placeholder="010-0000-0000"
-                  className="mt-2 sm:hidden"
-                />
-                {/* 2행: 생년월일 + 사진 */}
+                {/* 모바일: 전화번호 + 이메일 */}
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:hidden">
+                  <input
+                    type="tel"
+                    value={p.phone}
+                    onChange={e => updateParticipant(i, 'phone', e.target.value)}
+                    required
+                    placeholder="010-0000-0000"
+                  />
+                  <input
+                    type="email"
+                    value={p.email}
+                    onChange={e => updateParticipant(i, 'email', e.target.value)}
+                    placeholder="이메일"
+                    className="text-sm"
+                  />
+                </div>
+                {/* 3행: 생년월일 + 사진 */}
                 <div className="mt-2 grid grid-cols-[3fr_3fr_3fr_2fr] gap-1 items-center">
                   <select
                     value={p.birthdate ? p.birthdate.split('-')[0] : ''}
@@ -524,6 +700,45 @@ export default function GroupRegisterPage() {
           신청 후 참가비 20,000원을 입금하셔야 접수가 완료됩니다.
         </p>
       </form>
+
+      {/* 동명이인 사진 매칭 모달 */}
+      {showPhotoConflictModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-2">동명이인 사진 매칭</h3>
+            <p className="text-sm text-[#666] mb-4">
+              같은 이름의 학생이 여러 명입니다. 사진을 매칭할 학생을 선택해주세요.
+            </p>
+            {photoConflicts.map((conflict, ci) => (
+              <div key={ci} className="mb-4 p-3 border rounded-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <img src={conflict.preview} alt="" className="w-10 h-[53px] object-cover rounded border" />
+                  <span className="font-medium">{conflict.name}</span>
+                </div>
+                <div className="space-y-1">
+                  {conflict.matchingIndices.map(idx => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => resolvePhotoConflict(ci, idx)}
+                      className="w-full text-left px-3 py-2 rounded border hover:bg-[#f0f0f0] text-sm"
+                    >
+                      {participants[idx].name} - {participants[idx].grade}학년 {participants[idx].classNum}반 / {participants[idx].birthdate || '생년월일 미입력'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => { setShowPhotoConflictModal(false); setPhotoConflicts([]); }}
+              className="w-full mt-2 btn btn-secondary py-2"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
