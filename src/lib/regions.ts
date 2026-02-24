@@ -52,3 +52,24 @@ export const regionShortMap: Record<string, string> = {
   'Jeju-do': '제주',
   'Gangwon-do': '강원',
 };
+
+// 영문명 → 수험번호용 지역코드(2자리) 매핑
+export const examRegionCodeMap: Record<string, string> = {
+  'Seoul': '01',
+  'Incheon': '02',
+  'Gyeonggi-do': '03',
+  'Gangwon-do': '04',
+  'Busan': '05',
+  'Ulsan': '06',
+  'Gyeongsangnam-do': '07',
+  'Daegu': '08',
+  'Gyeongsangbuk-do': '09',
+  'Gwangju': '10',
+  'Jellanam-do': '11',
+  'Jeollabuk-do': '12',
+  'Daejeon': '13',
+  'Sejong-si': '14',
+  'Chungcheongnam-do': '15',
+  'Chungcheongbuk-do': '16',
+  'Jeju-do': '17',
+};

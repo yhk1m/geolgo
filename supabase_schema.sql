@@ -67,5 +67,25 @@ CREATE POLICY "Service role can update registrations"
   USING (true)
   WITH CHECK (true);
 
--- 5. 실시간 구독 활성화
+-- 5. 시험장소 테이블
+CREATE TABLE exam_locations (
+  region TEXT PRIMARY KEY,
+  school_name TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE exam_locations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view exam_locations"
+  ON exam_locations FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert exam_locations"
+  ON exam_locations FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update exam_locations"
+  ON exam_locations FOR UPDATE USING (true) WITH CHECK (true);
+
+-- 6. 실시간 구독 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE registrations;

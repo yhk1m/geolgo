@@ -78,34 +78,6 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* 시상 */}
-      <section className="mb-16">
-        <h2 className="text-2xl font-bold mb-6 sm:mb-8 text-[#111]">시상 내역</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {[
-            { title: '전국 부문', items: [['대상', '1명'], ['금상', '3명'], ['은상', '10명'], ['동상', '별도 공고'], ['지도교사상', '별도 공고']] },
-            { title: '지역 부문', items: [['대상', '1명'], ['금상', '2명'], ['은상', '3명'], ['동상', '별도 공고'], ['지도교사상', '별도 공고']] },
-          ].map((section, i) => (
-            <div key={i} className="p-5 sm:p-6 rounded-lg border-[1.5px] border-[#c8c8c8] bg-white transition-all duration-200 hover:bg-[#111] hover:border-[#111] hover:text-white group cursor-default">
-              <h3 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4 group-hover:text-[#ccc]">
-                {section.title}
-              </h3>
-              <div className="space-y-2 text-sm">
-                {section.items.map(([label, value], j) => (
-                  <div key={j} className="flex justify-between">
-                    <span>{label}</span>
-                    <span className="text-[#999] group-hover:text-[#aaa]">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-[#999] mt-3">
-          * 지역 부문과 전국 부문을 중복 수상할 수 있습니다.
-        </p>
-      </section>
-
       {/* 문의처 */}
       <section className="mb-16">
         <h2 className="text-2xl font-bold mb-6 sm:mb-8 text-[#111]">문의처</h2>

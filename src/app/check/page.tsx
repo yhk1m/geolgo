@@ -2,14 +2,19 @@
 
 import { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { getMockRegistrations } from '@/lib/mockdata';
+import { getMockRegistrations, getMockExamLocations } from '@/lib/mockdata';
 import { regionNameMap } from '@/lib/regions';
+import { computeExamNumbers } from '@/lib/examNumber';
+import { downloadExamTicketPDF } from '@/lib/examTicket';
+import type { ExamLocationInfo } from '@/lib/examTicket';
 
 interface Registration {
   id: string;
   name: string;
   school: string;
   grade: number;
+  phone: string;
+  email: string | null;
   region: string;
   registration_type: string;
   payment_status: string;
@@ -17,6 +22,7 @@ interface Registration {
   created_at: string;
   birthdate: string | null;
   photo_url: string | null;
+  class_name?: string | null;
 }
 
 export default function CheckPage() {
@@ -25,6 +31,7 @@ export default function CheckPage() {
   const [results, setResults] = useState<Registration[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   // Mock 모드일 때 샘플 3개 추출
   const mockSamples = !isSupabaseConfigured
@@ -55,7 +62,7 @@ export default function CheckPage() {
       } else {
         matched = getMockRegistrations().filter(
           r => r.name === name && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted'
-        );
+        ) as Registration[];
       }
 
       setResults(matched);
@@ -65,6 +72,51 @@ export default function CheckPage() {
       setSearching(false);
     }
   };
+
+  async function handleDownloadTicket(reg: Registration) {
+    setDownloading(true);
+    try {
+      // 수험번호 계산을 위해 해당 지역의 전체 등록 데이터 조회
+      let allRegistrations: Registration[];
+
+      if (isSupabaseConfigured) {
+        const { data } = await supabase
+          .from('registrations')
+          .select('*')
+          .order('created_at', { ascending: true });
+        allRegistrations = data || [];
+      } else {
+        allRegistrations = getMockRegistrations() as Registration[];
+      }
+
+      const examNumbers = computeExamNumbers(allRegistrations);
+
+      // 시험장소 조회
+      let examLocations: Record<string, ExamLocationInfo> = {};
+      if (isSupabaseConfigured) {
+        const { data: locations } = await supabase
+          .from('exam_locations')
+          .select('region, school_name, address');
+        if (locations) {
+          for (const loc of locations) {
+            examLocations[loc.region] = { school_name: loc.school_name || '', address: loc.address || '' };
+          }
+        }
+      } else {
+        examLocations = getMockExamLocations();
+      }
+
+      await downloadExamTicketPDF({
+        registrations: [reg],
+        examNumbers,
+        examLocations,
+      });
+    } catch {
+      alert('수험표 다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
@@ -174,6 +226,23 @@ export default function CheckPage() {
                         {new Date(reg.created_at).toLocaleDateString('ko-KR')}
                       </p>
                     </div>
+                  </div>
+
+                  {/* 수험표 다운로드 영역 */}
+                  <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
+                    {reg.payment_status === 'confirmed' ? (
+                      <button
+                        onClick={() => handleDownloadTicket(reg)}
+                        disabled={downloading}
+                        className="btn btn-primary w-full py-2.5 text-sm disabled:opacity-50"
+                      >
+                        {downloading ? '수험표 생성 중...' : '수험표 다운로드'}
+                      </button>
+                    ) : (
+                      <p className="text-sm text-[#999] text-center">
+                        입금 확인 후 수험표를 다운로드할 수 있습니다.
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

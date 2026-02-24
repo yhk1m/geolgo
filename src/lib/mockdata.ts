@@ -156,3 +156,25 @@ export function permanentDeleteMockRegistrations(ids: string[]) {
   if (!_cached) return;
   _cached = _cached.filter(r => !ids.includes(r.id));
 }
+
+// 시험장소 인메모리 저장소 (Mock 모드용)
+export interface ExamLocation {
+  school_name: string;
+  address: string;
+}
+
+const _examLocations: Record<string, ExamLocation> = {};
+
+export function getMockExamLocations(): Record<string, ExamLocation> {
+  const copy: Record<string, ExamLocation> = {};
+  for (const [k, v] of Object.entries(_examLocations)) {
+    copy[k] = { ...v };
+  }
+  return copy;
+}
+
+export function setMockExamLocations(locations: Record<string, ExamLocation>) {
+  for (const [region, location] of Object.entries(locations)) {
+    _examLocations[region] = { ...location };
+  }
+}

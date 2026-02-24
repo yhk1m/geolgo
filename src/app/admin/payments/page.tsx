@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations } from '@/lib/mockdata';
-import { regionNameMap, regionShortMap } from '@/lib/regions';
+import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations, getMockExamLocations, setMockExamLocations } from '@/lib/mockdata';
+import type { ExamLocation } from '@/lib/mockdata';
+import { regionNameMap, regionShortMap, REGIONS } from '@/lib/regions';
+import { computeExamNumbers } from '@/lib/examNumber';
+import { downloadExamTicketPDF } from '@/lib/examTicket';
+import type { ExamLocationInfo } from '@/lib/examTicket';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import { NOTO_SANS_KR_REGULAR } from '@/lib/pdfFont';
 
 interface Registration {
   id: string;
@@ -37,14 +39,10 @@ const SCHOOL_SPECIAL: Record<string, string> = {
 
 function shortenSchool(name: string): string {
   if (SCHOOL_SPECIAL[name]) return SCHOOL_SPECIAL[name];
-  // 사대부고: (국립)XX대학교사범대학부설/부속...고등학교 → XX사대부고
   const sabu = name.match(/(?:국립)?(.+?)대학교사범대학부[설속].*고등학교/);
   if (sabu) return `${sabu[1]}사대부고`;
-  // 외국어고: XX외국어고등학교 → XX외고
   if (name.includes('외국어')) return name.replace('외국어', '외').replace(/등학교$/, '');
-  // 여자고: XX여자고등학교 → XX여고
   if (name.endsWith('여자고등학교')) return name.replace('여자고등학교', '여고');
-  // 기본: 등학교 제거
   return name.replace(/등학교$/, '');
 }
 
@@ -63,9 +61,13 @@ export default function PaymentsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [deleteMode, setDeleteMode] = useState<'trash' | 'permanent'>('trash');
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [examLocations, setExamLocations] = useState<Record<string, ExamLocationInfo>>({});
+  const [locationDraft, setLocationDraft] = useState<Record<string, ExamLocationInfo>>({});
 
   useEffect(() => {
     loadData();
+    loadExamLocations();
   }, []);
 
   async function loadData() {
@@ -89,6 +91,101 @@ export default function PaymentsPage() {
     }
     setLoading(false);
   }
+
+  async function loadExamLocations() {
+    if (isSupabaseConfigured) {
+      const { data: locations } = await supabase
+        .from('exam_locations')
+        .select('region, school_name, address');
+      if (locations) {
+        const map: Record<string, ExamLocationInfo> = {};
+        for (const loc of locations) {
+          map[loc.region] = { school_name: loc.school_name || '', address: loc.address || '' };
+        }
+        setExamLocations(map);
+      }
+    } else {
+      setExamLocations(getMockExamLocations());
+    }
+  }
+
+  async function saveExamLocations() {
+    if (isSupabaseConfigured) {
+      for (const [region, loc] of Object.entries(locationDraft)) {
+        await supabase
+          .from('exam_locations')
+          .upsert({ region, school_name: loc.school_name, address: loc.address }, { onConflict: 'region' });
+      }
+    } else {
+      setMockExamLocations(locationDraft as Record<string, ExamLocation>);
+    }
+    const copy: Record<string, ExamLocationInfo> = {};
+    for (const [k, v] of Object.entries(locationDraft)) {
+      copy[k] = { ...v };
+    }
+    setExamLocations(copy);
+    setShowLocationModal(false);
+  }
+
+  function openLocationModal() {
+    const copy: Record<string, ExamLocationInfo> = {};
+    for (const [k, v] of Object.entries(examLocations)) {
+      copy[k] = { ...v };
+    }
+    setLocationDraft(copy);
+    setShowLocationModal(true);
+  }
+
+  // 한글 지역명 → 영문명 역매핑 (CSV 파싱용)
+  const korToEngMap: Record<string, string> = {};
+  for (const region of REGIONS) {
+    const short = regionShortMap[region.nameEn] || region.nameKo;
+    korToEngMap[short] = region.nameEn;
+    korToEngMap[region.nameKo] = region.nameEn;
+  }
+
+  function downloadCsvTemplate() {
+    const bom = '\uFEFF';
+    const header = '지역,학교명,주소';
+    const rows = REGIONS.map(r => `${regionShortMap[r.nameEn] || r.nameKo},,`);
+    const csv = bom + header + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '시험장소_양식.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) return;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      // 헤더 건너뛰기
+      const dataLines = lines.slice(1);
+      const draft = { ...locationDraft };
+      for (const line of dataLines) {
+        const cols = line.split(',').map(c => c.trim());
+        if (cols.length < 3) continue;
+        const [regionKo, schoolName, address] = cols;
+        const regionEn = korToEngMap[regionKo];
+        if (!regionEn) continue;
+        draft[regionEn] = { school_name: schoolName, address };
+      }
+      setLocationDraft(draft);
+    };
+    reader.readAsText(file, 'UTF-8');
+    // input 초기화
+    e.target.value = '';
+  }
+
+  // 수험번호 계산 (전체 데이터 기준 - 삭제된 항목 포함)
+  const examNumbers = useMemo(() => computeExamNumbers(data), [data]);
 
   function requestDelete(ids: string[], mode: 'trash' | 'permanent' = 'trash') {
     setDeleteTargetIds(ids);
@@ -324,221 +421,14 @@ export default function PaymentsPage() {
     XLSX.writeFile(wb, `지리올림피아드_${label}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  async function downloadPDF(targets?: Registration[]) {
+  async function handleDownloadPDF(targets?: Registration[]) {
     const list = targets || data;
     if (list.length === 0) return;
-
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    doc.addFileToVFS('NotoSansKR-Regular.ttf', NOTO_SANS_KR_REGULAR);
-    doc.addFont('NotoSansKR-Regular.ttf', 'NotoSansKR', 'normal');
-
-    const pw = 210;
-    const mx = 20; // margin x
-    const tw = pw - mx * 2; // table width
-
-    // Helper: draw cell with border and text
-    function cell(x: number, y: number, w: number, h: number, text: string, opts?: { fontSize?: number; bold?: boolean; align?: 'left' | 'center'; bg?: string }) {
-      const fs = opts?.fontSize || 10;
-      const align = opts?.align || 'left';
-      if (opts?.bg) {
-        doc.setFillColor(opts.bg);
-        doc.rect(x, y, w, h, 'FD');
-      } else {
-        doc.rect(x, y, w, h);
-      }
-      doc.setFont('NotoSansKR', 'normal');
-      doc.setFontSize(fs);
-      doc.setTextColor(0);
-      const tx = align === 'center' ? x + w / 2 : x + 3;
-      doc.text(text, tx, y + h / 2 + fs * 0.12, { align, baseline: 'middle' });
-    }
-
-    for (let idx = 0; idx < list.length; idx++) {
-      if (idx > 0) doc.addPage();
-      const r = list[idx];
-
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.3);
-
-      // Title (굵게: stroke로 테두리 두껍게)
-      let y = 20;
-      const title = '제26회 전국지리올림피아드 참가 신청서';
-      doc.setFont('NotoSansKR', 'normal');
-      doc.setFontSize(18);
-      doc.setTextColor(0);
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.5);
-      (doc as unknown as Record<string, unknown>).setTextRenderingMode = undefined;
-      doc.text(title, pw / 2, y, { align: 'center', renderingMode: 'fillThenStroke' });
-      y += 10;
-
-      // Main info table
-      const photoW = 30;
-      const photoH = 40;
-      const labelW = 25;
-      const rowH = 10;
-      const infoX = mx + photoW;
-      const infoW = tw - photoW;
-
-      // Photo cell (spans 4 rows)
-      doc.rect(mx, y, photoW, photoH);
-      doc.setFontSize(7);
-      doc.setTextColor(120);
-      doc.text('사 진', mx + photoW / 2, y + 12, { align: 'center' });
-      doc.text('*6개월 이내에 촬영한', mx + photoW / 2, y + 18, { align: 'center' });
-      doc.text('탈모 상반신 사진', mx + photoW / 2, y + 23, { align: 'center' });
-      doc.text('(3cm x 4cm)', mx + photoW / 2, y + 28, { align: 'center' });
-      doc.setTextColor(0);
-
-      if (r.photo_url) {
-        try {
-          const response = await fetch(r.photo_url);
-          const blob = await response.blob();
-          const base64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(blob);
-          });
-          doc.addImage(base64, 'JPEG', mx + 2, y + 2, photoW - 4, photoH - 4);
-        } catch {
-          // photo load failed, keep placeholder text
-        }
-      }
-
-      // Row 1: 학교 | (school) | 학년반 | (grade+class)
-      const c1 = infoX;
-      const lw = labelW;
-      const leftValW = 50;
-      const splitX = c1 + lw + leftValW;
-      const rightValW = infoW - lw - leftValW - lw;
-
-      const labelStyle = { bg: '#f5f5f5', fontSize: 9, align: 'center' as const };
-
-      cell(c1, y, lw, rowH, '학교', labelStyle);
-      cell(c1 + lw, y, leftValW, rowH, r.school);
-      cell(splitX, y, lw, rowH, '학년반', labelStyle);
-      cell(splitX + lw, y, rightValW, rowH, `${r.grade}학년 ${r.class_name || ''}반`);
-      y += rowH;
-
-      // Row 2: 성명 | (name) | 생년월일 | (birthdate)
-      cell(c1, y, lw, rowH, '성명', labelStyle);
-      cell(c1 + lw, y, leftValW, rowH, r.name);
-      cell(splitX, y, lw, rowH, '생년월일', labelStyle);
-      cell(splitX + lw, y, rightValW, rowH, r.birthdate || '');
-      y += rowH;
-
-      // Row 3: 연락처 | phone / email
-      cell(c1, y, lw, rowH * 2, '연락처', labelStyle);
-      cell(c1 + lw, y, infoW - lw, rowH, `전화 : ${r.phone}`);
-      y += rowH;
-      cell(c1 + lw, y, infoW - lw, rowH, `E-mail : ${r.email || ''}`);
-      y += rowH;
-
-      // Spacer
-      y += 5;
-
-      // 참가 신청 문구
-      const stmtH = 40;
-      doc.rect(mx, y, tw, stmtH);
-      doc.setFont('NotoSansKR', 'normal');
-      doc.setFontSize(10);
-      doc.text('위 본인은 전국지리교사연합회가 주관하여 시행하는', pw / 2, y + 10, { align: 'center' });
-      doc.text('<제26회 전국지리올림피아드> 참가를 신청합니다.', pw / 2, y + 18, { align: 'center' });
-      doc.setFontSize(11);
-      doc.text(`${new Date(r.created_at).getFullYear()}. ${new Date(r.created_at).getMonth() + 1}. ${new Date(r.created_at).getDate()}.`, pw / 2, y + 28, { align: 'center' });
-      y += stmtH;
-
-      // 신청인 서명란
-      const signH = 15;
-      doc.rect(mx, y, tw, signH);
-      doc.setFontSize(10);
-      doc.text(`신청인 : ${r.name}  (서명 또는 날인)`, pw / 2, y + signH / 2 + 1, { align: 'center' });
-      y += signH;
-
-      // 접수정보 표 (레이블 왼쪽, 값 오른쪽)
-      const infoH = 10;
-      const infoLW = lw; // 레이블 너비 = 다른 칸과 동일
-      const infoHalfW = tw / 2;
-      const infoValW = infoHalfW - infoLW;
-
-      // Row 1: 지역 | (값) | 접수유형 | (값)
-      cell(mx, y, infoLW, infoH, '지역', labelStyle);
-      cell(mx + infoLW, y, infoValW, infoH, regionNameMap[r.region] || r.region);
-      cell(mx + infoHalfW, y, infoLW, infoH, '접수유형', labelStyle);
-      cell(mx + infoHalfW + infoLW, y, infoValW, infoH, r.registration_type === 'group' ? '단체' : '개인');
-      y += infoH;
-
-      // Row 2: 입금상태 | 체크박스 | 참가비 | (값)
-      cell(mx, y, infoLW, infoH, '입금상태', labelStyle);
-      // 입금상태 값: 체크박스 2개
-      doc.rect(mx + infoLW, y, infoValW, infoH);
-      doc.setFont('NotoSansKR', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(0);
-      const cbY = y + infoH / 2;
-      const cbSize = 3;
-      const cbX1 = mx + infoLW + 5;
-      // 입금 대기 체크박스
-      doc.rect(cbX1, cbY - cbSize / 2, cbSize, cbSize);
-      if (r.payment_status === 'pending') {
-        doc.setLineWidth(0.5);
-        doc.line(cbX1 + 0.5, cbY, cbX1 + cbSize / 2, cbY + cbSize / 2 - 0.3);
-        doc.line(cbX1 + cbSize / 2, cbY + cbSize / 2 - 0.3, cbX1 + cbSize - 0.3, cbY - cbSize / 2 + 0.3);
-        doc.setLineWidth(0.3);
-      }
-      doc.text('입금 대기', cbX1 + cbSize + 2, cbY + 1, { baseline: 'middle' });
-      const cbX2 = cbX1 + 30;
-      // 입금 확인 체크박스
-      doc.rect(cbX2, cbY - cbSize / 2, cbSize, cbSize);
-      if (r.payment_status === 'confirmed') {
-        doc.setLineWidth(0.5);
-        doc.line(cbX2 + 0.5, cbY, cbX2 + cbSize / 2, cbY + cbSize / 2 - 0.3);
-        doc.line(cbX2 + cbSize / 2, cbY + cbSize / 2 - 0.3, cbX2 + cbSize - 0.3, cbY - cbSize / 2 + 0.3);
-        doc.setLineWidth(0.3);
-      }
-      doc.text('입금 확인', cbX2 + cbSize + 2, cbY + 1, { baseline: 'middle' });
-
-      cell(mx + infoHalfW, y, infoLW, infoH, '참가비', labelStyle);
-      cell(mx + infoHalfW + infoLW, y, infoValW, infoH, `${(r.payment_amount || 0).toLocaleString()}원`);
-      y += infoH;
-
-      // 개인정보 수집 동의
-      y += 5;
-      const privH = 40;
-      const privLabelW = 30;
-      cell(mx, y, privLabelW, privH, '개인정보\n수집·이용', { bg: '#f5f5f5', fontSize: 9, align: 'center' });
-      doc.rect(mx + privLabelW, y, tw - privLabelW, privH);
-      doc.setFontSize(8);
-      const px = mx + privLabelW + 3;
-      let py = y + 8;
-      doc.text('수집·이용 목적 : 전국지리올림피아드 운영관련 안내사항 통보', px, py);
-      py += 6;
-      doc.text('수집·이용할 항목 : 학교명, 학년반, 성명, 생년월일, 연락처', px, py);
-      py += 6;
-      doc.text('개인정보 보유·이용 기간 : 이용목적 달성시까지', px, py);
-      py += 6;
-      doc.text('동의를 거부할 권리가 있으며, 거부할 경우 전국지리올림피아드와 관련한 서비스를 제공받을 수 없음.', px, py);
-      y += privH;
-
-      // 하단 안내문
-      y += 5;
-      doc.setFontSize(8);
-      doc.setTextColor(50, 50, 200);
-      doc.text('※ 수집한 개인정보는 정보주체의 동의 없이 수집한 목적 외로 사용하지 않습니다.', mx, y);
-      doc.setTextColor(0);
-
-    }
-
-    let fileName: string;
-    if (list.length === 1) {
-      const r = list[0];
-      const date = new Date(r.created_at).toISOString().slice(0, 10);
-      fileName = `${shortenSchool(r.school)}_${r.name}_${date}.pdf`;
-    } else {
-      fileName = `참가신청서_${list.length}명_${new Date().toISOString().slice(0, 10)}.pdf`;
-    }
-    doc.save(fileName);
+    await downloadExamTicketPDF({
+      registrations: list,
+      examNumbers,
+      examLocations,
+    });
   }
 
   if (loading) return <div className="text-center py-20 text-[#999]">로딩 중...</div>;
@@ -546,22 +436,28 @@ export default function PaymentsPage() {
   return (
     <div>
       <div className="flex items-center justify-end gap-2 mb-6 flex-wrap">
+        <button
+          onClick={openLocationModal}
+          className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-lg"
+        >
+          시험장소 설정
+        </button>
         {selected.size > 0 && !isTrashTab && (
           <button
             onClick={() => {
               const targets = data.filter(r => selected.has(r.id));
-              downloadPDF(targets);
+              handleDownloadPDF(targets);
             }}
             className="px-3 py-1.5 text-xs sm:text-sm text-white bg-[#111] hover:bg-[#333] border border-[#111] rounded-lg"
           >
-            신청서 PDF 선택 다운로드 ({selected.size}명)
+            수험표 PDF 선택 다운로드 ({selected.size}명)
           </button>
         )}
         <button
-          onClick={() => downloadPDF()}
+          onClick={() => handleDownloadPDF()}
           className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-lg"
         >
-          신청서 PDF 일괄 다운로드
+          수험표 PDF 일괄 다운로드
         </button>
         <div className="flex items-center border border-[#e5e5e5] rounded-lg overflow-hidden">
           <span className="px-3 py-1.5 text-sm font-medium text-[#999] bg-[#fafafa] hidden sm:inline">엑셀 다운로드</span>
@@ -730,6 +626,7 @@ export default function PaymentsPage() {
                   className="w-4 h-4"
                 />
               </th>
+              <th>수험번호</th>
               <th>이름</th>
               <th>학교</th>
               <th>지역</th>
@@ -761,6 +658,7 @@ export default function PaymentsPage() {
                     className="w-4 h-4"
                   />
                 </td>
+                <td className="text-xs text-[#666] font-mono whitespace-nowrap">{examNumbers.get(r.id) || '-'}</td>
                 <td className="font-medium text-[#111] whitespace-nowrap">{r.name}</td>
                 <td>
                   <span className="sm:hidden">{shortenSchool(r.school)}</span>
@@ -911,6 +809,79 @@ export default function PaymentsPage() {
                 className="px-4 py-2 text-sm text-white bg-[#c00] rounded-md hover:bg-[#a00]"
               >
                 {deleteMode === 'permanent' ? '영구 삭제' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 시험장소 설정 모달 */}
+      {showLocationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[700px] max-h-[85vh] shadow-xl flex flex-col">
+            <h3 className="text-lg font-bold mb-2 text-[#111]">시험장소 설정</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={downloadCsvTemplate}
+                className="px-3 py-1.5 text-xs text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-md"
+              >
+                CSV 양식 다운로드
+              </button>
+              <label className="px-3 py-1.5 text-xs text-white bg-[#111] hover:bg-[#333] rounded-md cursor-pointer">
+                CSV 업로드
+                <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
+              </label>
+            </div>
+            {/* 헤더 */}
+            <div className="flex items-center gap-2 px-1 pb-2 border-b border-[#e5e5e5] text-xs font-semibold text-[#999]">
+              <span className="w-16 shrink-0">지역</span>
+              <span className="flex-1">학교명</span>
+              <span className="flex-1">주소</span>
+            </div>
+            <div className="overflow-y-auto flex-1 space-y-2 pr-2 mt-2">
+              {REGIONS.map(region => {
+                const loc = locationDraft[region.nameEn] || { school_name: '', address: '' };
+                return (
+                  <div key={region.nameEn} className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[#333] w-16 shrink-0">
+                      {regionShortMap[region.nameEn] || region.nameKo}
+                    </span>
+                    <input
+                      type="text"
+                      value={loc.school_name}
+                      onChange={e => setLocationDraft(prev => ({
+                        ...prev,
+                        [region.nameEn]: { ...prev[region.nameEn] || { school_name: '', address: '' }, school_name: e.target.value }
+                      }))}
+                      placeholder="학교명"
+                      className="flex-1 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={loc.address}
+                      onChange={e => setLocationDraft(prev => ({
+                        ...prev,
+                        [region.nameEn]: { ...prev[region.nameEn] || { school_name: '', address: '' }, address: e.target.value }
+                      }))}
+                      placeholder="주소"
+                      className="flex-1 text-sm"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-[#e5e5e5]">
+              <button
+                onClick={() => setShowLocationModal(false)}
+                className="px-4 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-md hover:bg-[#f5f5f5]"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveExamLocations}
+                className="px-4 py-2 text-sm text-white bg-[#111] rounded-md hover:bg-[#333]"
+              >
+                저장
               </button>
             </div>
           </div>
