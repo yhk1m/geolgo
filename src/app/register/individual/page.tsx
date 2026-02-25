@@ -13,6 +13,9 @@ export default function IndividualRegisterPage() {
     phone: '',
     email: '',
     region: '',
+    teacherName: '',
+    teacherPhone: '',
+    teacherEmail: '',
   });
   const [birthYear, setBirthYear] = useState('');
   const [birthMonth, setBirthMonth] = useState('');
@@ -120,6 +123,9 @@ export default function IndividualRegisterPage() {
         registration_type: 'individual',
         payment_status: 'pending',
         payment_amount: 20000,
+        teacher_name: form.teacherName || null,
+        teacher_phone: form.teacherPhone || null,
+        teacher_email: form.teacherEmail || null,
       });
 
       if (error) throw error;
@@ -128,7 +134,7 @@ export default function IndividualRegisterPage() {
         success: true,
         message: `${form.name}님의 참가 신청이 완료되었습니다. 참가비 20,000원을 입금해주세요.`,
       });
-      setForm({ name: '', school: '', grade: '', classNum: '', phone: '', email: '', region: '' });
+      setForm({ name: '', school: '', grade: '', classNum: '', phone: '', email: '', region: '', teacherName: '', teacherPhone: '', teacherEmail: '' });
       setBirthYear(''); setBirthMonth(''); setBirthDay('');
       setPhotoFile(null);
       setPhotoPreview(null);
@@ -351,6 +357,51 @@ export default function IndividualRegisterPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-[#e5e5e5]">
+          <h2 className="text-lg font-semibold text-[#111] mb-4">담당교사 정보</h2>
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-[#333] mb-1.5">
+                교사 이름 <span className="text-[#c00]">*</span>
+              </label>
+              <input
+                type="text"
+                name="teacherName"
+                value={form.teacherName}
+                onChange={handleChange}
+                required
+                placeholder="홍길동"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#333] mb-1.5">
+                교사 전화번호 <span className="text-[#c00]">*</span>
+              </label>
+              <input
+                type="tel"
+                name="teacherPhone"
+                value={form.teacherPhone}
+                onChange={handleChange}
+                required
+                placeholder="010-1234-5678"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#333] mb-1.5">
+                교사 이메일 <span className="text-[#c00]">*</span>
+              </label>
+              <input
+                type="email"
+                name="teacherEmail"
+                value={form.teacherEmail}
+                onChange={handleChange}
+                required
+                placeholder="teacher@school.ac.kr"
+              />
+            </div>
           </div>
         </div>
 

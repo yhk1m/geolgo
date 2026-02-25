@@ -94,41 +94,43 @@ export default function AdminDashboard() {
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        {/* 왼쪽: 총 신청자 + 입금 확인/대기 */}
+        {/* 왼쪽: 총 신청자 + 개인/단체 */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg bg-[#111] text-white border border-[#111]">
-            <span className="text-sm text-[#888]">총 신청자</span>
-            <span className="text-xl sm:text-2xl font-bold">{stats.total}<span className="text-sm font-normal ml-1">명</span></span>
+          <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg bg-[#111] text-white border border-[#111]">
+            <span className="text-xs text-[#888]">총 신청자</span>
+            <span className="text-lg sm:text-xl font-bold">{stats.total}<span className="text-sm font-normal ml-1">명</span></span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
-              <span className="text-sm text-[#999]">입금 확인</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#111]">{stats.confirmed}<span className="text-sm font-normal ml-1">명</span></span>
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+              <span className="text-xs text-[#999]">개인</span>
+              <span className="text-lg sm:text-xl font-bold text-[#111]">{stats.individual}<span className="text-sm font-normal ml-1">명</span></span>
             </div>
-            <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
-              <span className="text-sm text-[#999]">입금 대기</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#111]">{stats.pending}<span className="text-sm font-normal ml-1">명</span></span>
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+              <span className="text-xs text-[#999]">단체</span>
+              <span className="text-lg sm:text-xl font-bold text-[#111]">{stats.group}<span className="text-sm font-normal ml-1">명</span></span>
             </div>
           </div>
         </div>
-        {/* 오른쪽: 확인된 금액 + 개인/단체/미확인 */}
+        {/* 오른쪽: 확인된 금액/미확인 + 입금 확인/대기 */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg bg-[#111] text-white border border-[#111]">
-            <span className="text-sm text-[#888]">확인된 금액</span>
-            <span className="text-xl sm:text-2xl font-bold">{stats.confirmedAmount.toLocaleString()}<span className="text-sm font-normal ml-1">원</span></span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg bg-[#111] text-white border border-[#111]">
+              <span className="text-xs text-[#888]">확인</span>
+              <span className="text-lg sm:text-xl font-bold">{stats.confirmedAmount.toLocaleString()}<span className="text-sm font-normal ml-1">원</span></span>
+            </div>
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg bg-[#111] text-white border border-[#111]">
+              <span className="text-xs text-[#888]">미확인</span>
+              <span className="text-lg sm:text-xl font-bold">{(stats.totalAmount - stats.confirmedAmount).toLocaleString()}<span className="text-sm font-normal ml-1">원</span></span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="flex items-center justify-between px-3 sm:px-4 py-3 rounded-lg border border-[#e5e5e5] bg-white">
-              <span className="text-sm text-[#999]">개인</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#111]">{stats.individual}<span className="text-sm font-normal ml-1">명</span></span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+              <span className="text-xs text-[#999]">입금 확인</span>
+              <span className="text-lg sm:text-xl font-bold text-[#111]">{stats.confirmed}<span className="text-sm font-normal ml-1">명</span></span>
             </div>
-            <div className="flex items-center justify-between px-3 sm:px-4 py-3 rounded-lg border border-[#e5e5e5] bg-white">
-              <span className="text-sm text-[#999]">단체</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#111]">{stats.group}<span className="text-sm font-normal ml-1">명</span></span>
-            </div>
-            <div className="col-span-2 flex items-center justify-between px-3 sm:px-4 py-3 rounded-lg border border-[#e5e5e5] bg-white">
-              <span className="text-sm text-[#999]">미확인</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#111]">{(stats.totalAmount - stats.confirmedAmount).toLocaleString()}<span className="text-sm font-normal ml-1">원</span></span>
+            <div className="flex items-center justify-between px-2 sm:px-2.5 py-3 rounded-lg border border-[#e5e5e5] bg-white">
+              <span className="text-xs text-[#999]">입금 대기</span>
+              <span className="text-lg sm:text-xl font-bold text-[#111]">{stats.pending}<span className="text-sm font-normal ml-1">명</span></span>
             </div>
           </div>
         </div>

@@ -22,7 +22,8 @@ export default function Navigation() {
   return (
     <header className="border-b border-[#e5e5e5] bg-white sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-baseline gap-1.5 tracking-tight text-[#111]">
+        <Link href="/" className="flex items-center gap-1.5 tracking-tight text-[#111]">
+          <img src="/favicon.svg" alt="" className="w-6 h-6" />
           <span className="text-lg font-bold">Unigeo</span>
           <span className="hidden sm:inline text-[14px] font-normal text-[#999]">전국지리올림피아드 신청 시스템</span>
         </Link>

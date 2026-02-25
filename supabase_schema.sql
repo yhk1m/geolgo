@@ -27,6 +27,9 @@ CREATE TABLE registrations (
   group_id UUID REFERENCES groups(id) ON DELETE SET NULL,
   payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'confirmed')),
   payment_amount INTEGER DEFAULT 20000,
+  teacher_name TEXT,
+  teacher_phone TEXT,
+  teacher_email TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

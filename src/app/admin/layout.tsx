@@ -51,11 +51,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-[#fafafa] flex flex-col">
       <header className="bg-[#111] text-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-8">
-            <Link href="/admin/dashboard" className="flex items-baseline gap-1.5 tracking-tight">
+            <Link href="/admin/dashboard" className="flex items-center gap-1.5 tracking-tight">
+              <img src="/favicon.svg" alt="" className="w-6 h-6 invert" />
               <span className="font-bold">Unigeo</span>
               <span className="text-[13px] font-normal text-[#888]">관리자</span>
             </Link>
@@ -129,7 +130,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         )}
       </header>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 flex-1">
         {children}
       </div>
     </div>
