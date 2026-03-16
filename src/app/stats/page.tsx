@@ -151,7 +151,7 @@ export default function StatsPage() {
                   </th>
                   <th className="cursor-pointer select-none" onClick={() => toggleSort('rate')}>
                     <span className="sm:hidden">만명당{sortIndicator('rate')}</span>
-                    <span className="hidden sm:inline">만명당 신청률{sortIndicator('rate')}</span>
+                    <span className="hidden sm:inline">만명당 신청자 수{sortIndicator('rate')}</span>
                   </th>
                   <th className="cursor-pointer select-none" onClick={() => toggleSort('ratio')}>
                     비율{sortIndicator('ratio')}

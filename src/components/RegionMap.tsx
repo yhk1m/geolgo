@@ -56,7 +56,7 @@ function makeQuantilePieces(values: number[]) {
 export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
-  const [viewMode, setViewMode] = useState<'map-count' | 'map-rate' | 'bar'>('map-count');
+  const [viewMode, setViewMode] = useState<'map-count' | 'map-rate' | 'bar-count' | 'bar-rate'>('map-count');
   const [geoLoaded, setGeoLoaded] = useState(false);
   const [scaleBar, setScaleBar] = useState({ width: 60, label: '100 km' });
 
@@ -72,6 +72,11 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
         value: parseFloat(((d.value / (regionStudentsMap[d.name] || 1)) * 10000).toFixed(2)),
       })),
     [sortedData]
+  );
+
+  const sortedRateData = useMemo(
+    () => [...rateData].sort((a, b) => a.value - b.value),
+    [rateData]
   );
 
   const updateScaleBar = useCallback(() => {
@@ -267,7 +272,7 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
         formatter: (params: unknown) => {
           const p = params as { name: string; value: number };
           const koName = regionNameMap[p.name] || p.name;
-          return `<strong>${koName}</strong><br/>만명당 신청률: ${p.value || 0}명`;
+          return `<strong>${koName}</strong><br/>만명당 신청자 수: ${p.value || 0}명`;
         },
       },
       visualMap: {
@@ -284,22 +289,13 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
           universalTransition: true,
           data: addBorderStyle(rateData, ratePieces),
           markPoint: makeDokdoMarkPoint(
-            `<strong>경상북도</strong><br/>만명당 신청률: ${rateData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
+            `<strong>경상북도</strong><br/>만명당 신청자 수: ${rateData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
           ),
         },
       ],
     };
 
-    const barOption: echarts.EChartsOption = {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const p = (params as { name: string; value: number }[])[0];
-          const koName = regionNameMap[p.name] || p.name;
-          return `<strong>${koName}</strong><br/>신청자: ${p.value}명`;
-        },
-      },
+    const barBaseConfig = {
       visualMap: undefined,
       grid: {
         left: '3%',
@@ -309,10 +305,28 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
         containLabel: true,
       },
       xAxis: {
-        type: 'value',
+        type: 'value' as const,
         axisLine: { lineStyle: { color: '#e5e5e5' } },
         axisLabel: { color: '#999' },
         splitLine: { lineStyle: { color: '#f0f0f0' } },
+      },
+    };
+
+    const barGradient = new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+      { offset: 0, color: '#999' },
+      { offset: 1, color: '#1a1a1a' },
+    ]);
+
+    const barCountOption: echarts.EChartsOption = {
+      ...barBaseConfig,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const p = (params as { name: string; value: number }[])[0];
+          const koName = regionNameMap[p.name] || p.name;
+          return `<strong>${koName}</strong><br/>신청자: ${p.value}명`;
+        },
       },
       yAxis: {
         type: 'category',
@@ -329,38 +343,59 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
         data: sortedData.map(d => d.value),
         universalTransition: true,
         animationDurationUpdate: 1000,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#999' },
-            { offset: 1, color: '#1a1a1a' },
-          ]),
-          borderRadius: [0, 3, 3, 0],
+        itemStyle: { color: barGradient, borderRadius: [0, 3, 3, 0] },
+        label: { show: true, position: 'right', formatter: '{c}명', fontSize: 11, color: '#666' },
+      },
+    };
+
+    const barRateOption: echarts.EChartsOption = {
+      ...barBaseConfig,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const p = (params as { name: string; value: number }[])[0];
+          const koName = regionNameMap[p.name] || p.name;
+          return `<strong>${koName}</strong><br/>만명당 신청자 수: ${p.value}명`;
         },
-        label: {
-          show: true,
-          position: 'right',
-          formatter: '{c}명',
-          fontSize: 11,
-          color: '#666',
+      },
+      yAxis: {
+        type: 'category',
+        data: sortedRateData.map(d => d.name),
+        axisLine: { lineStyle: { color: '#e5e5e5' } },
+        axisLabel: {
+          color: '#333',
+          formatter: (value: string) => regionNameMap[value] || value,
         },
+      },
+      series: {
+        type: 'bar',
+        id: 'region-stat',
+        data: sortedRateData.map(d => d.value),
+        universalTransition: true,
+        animationDurationUpdate: 1000,
+        itemStyle: { color: barGradient, borderRadius: [0, 3, 3, 0] },
+        label: { show: true, position: 'right', formatter: '{c}명', fontSize: 11, color: '#666' },
       },
     };
 
     const options = {
       'map-count': mapCountOption,
       'map-rate': mapRateOption,
-      'bar': barOption,
+      'bar-count': barCountOption,
+      'bar-rate': barRateOption,
     };
 
     chart.clear();
     chart.setOption(options[viewMode]);
 
-    if (viewMode !== 'bar') {
+    const isMap = viewMode.startsWith('map');
+    if (isMap) {
       setTimeout(updateScaleBar, 100);
       chart.on('georoam', updateScaleBar);
     }
 
-    if (onRegionClick && viewMode !== 'bar') {
+    if (onRegionClick && isMap) {
       chart.on('selectchanged', (params: unknown) => {
         const p = params as { fromAction: string; selected: { dataIndex: number[] }[] };
         const selectedIndices = p.selected?.[0]?.dataIndex || [];
@@ -378,15 +413,16 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
       chart.off('georoam');
       chart.off('selectchanged');
     };
-  }, [viewMode, geoLoaded, sortedData, rateData, updateScaleBar, onRegionClick]);
+  }, [viewMode, geoLoaded, sortedData, rateData, sortedRateData, updateScaleBar, onRegionClick]);
 
   return (
     <div>
-      <div className="flex justify-center gap-2 mb-6">
+      <div className="flex justify-center gap-2 mb-6 flex-wrap">
         {[
           { key: 'map-count' as const, label: '지도 (신청자 수)' },
-          { key: 'map-rate' as const, label: '지도 (만명당 신청률)' },
-          { key: 'bar' as const, label: '막대 그래프' },
+          { key: 'map-rate' as const, label: '지도 (만명당 신청자 수)' },
+          { key: 'bar-count' as const, label: '막대 (신청자 수)' },
+          { key: 'bar-rate' as const, label: '막대 (만명당 신청자 수)' },
         ].map(btn => (
           <button
             key={btn.key}
@@ -405,9 +441,9 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
       <div className="relative">
         <div
           ref={chartRef}
-          style={{ width: '100%', height: viewMode === 'bar' ? '600px' : '500px' }}
+          style={{ width: '100%', height: viewMode.startsWith('bar') ? '600px' : '500px' }}
         />
-        {viewMode !== 'bar' && (
+        {viewMode.startsWith('map') && (
           <>
             {/* 방위표 (North Arrow) */}
             <div className="absolute top-3 left-3 flex flex-col items-center bg-white/80 rounded px-2 py-1.5 border border-[#ddd]">
