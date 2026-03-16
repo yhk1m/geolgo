@@ -9,8 +9,8 @@ export default function Footer() {
             <img src="/KERIS.png" alt="KERIS" className="h-9 sm:h-[43px] object-contain" />
           </div>
           <div className="text-left text-xs text-[#666] space-y-1">
-            <p>문의 : bgmlkim@gmail.com</p>
-            <p>Copyright 2026 김용현(양정고등학교) All Rights Reserved.</p>
+            <p>신청 시스템 문의 : bgmlkim@gmail.com</p>
+            <p>Copyright 2026. 양정고등학교 김용현. All Rights Reserved.</p>
           </div>
         </div>
       </div>
