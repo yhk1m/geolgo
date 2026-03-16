@@ -146,13 +146,7 @@ export default function RegionMap({ data }: RegionMapProps) {
       map: 'Korea',
       nameProperty: 'name',
       label: {
-        show: true,
-        formatter: (params: unknown) => {
-          const p = params as { name: string };
-          return regionNameMap[p.name] || p.name;
-        },
-        fontSize: 10,
-        color: '#666',
+        show: false,
       },
       itemStyle: {
         borderColor: '#fff',
