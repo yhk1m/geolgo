@@ -462,26 +462,13 @@ export default function GroupRegisterPage() {
             <h2 className="text-lg font-semibold text-[#111]">
               참가 학생 ({participants.length}명)
             </h2>
-            <div className="flex gap-2">
-              <label className="btn btn-secondary text-sm px-4 py-1.5 cursor-pointer">
-                사진 일괄 업로드
-                <input
-                  ref={bulkPhotoRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleBulkPhotoUpload}
-                  className="hidden"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={addParticipant}
-                className="btn btn-secondary text-sm px-4 py-1.5"
-              >
-                + 학생 추가
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={addParticipant}
+              className="btn btn-secondary text-sm px-4 py-1.5"
+            >
+              + 학생 추가
+            </button>
           </div>
 
           {/* CSV 업로드 */}
@@ -496,7 +483,7 @@ export default function GroupRegisterPage() {
                 양식 다운로드
               </button>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <label className="btn btn-secondary text-sm px-4 py-1.5 cursor-pointer">
                 CSV 파일 선택
                 <input
@@ -504,6 +491,17 @@ export default function GroupRegisterPage() {
                   type="file"
                   accept=".csv"
                   onChange={handleCSVUpload}
+                  className="hidden"
+                />
+              </label>
+              <label className="btn btn-secondary text-sm px-4 py-1.5 cursor-pointer">
+                사진 일괄 업로드
+                <input
+                  ref={bulkPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleBulkPhotoUpload}
                   className="hidden"
                 />
               </label>
