@@ -8,8 +8,8 @@ interface RegistrationForExamNumber {
 
 /**
  * 전체 등록 데이터를 받아 지역별 created_at 순으로 수험번호를 부여한다.
- * 수험번호 = '11' + 지역코드(2자리) + 순번(3자리, 1000명 이상 시 4자리)
- * 삭제된 항목도 포함하여 순번을 매겨 번호 안정성 유지.
+ * 수험번호 = '11' + 분반(2자리) + 번호(2자리, 01~70) + 지역번호(2자리) = 총 8자리
+ * 분반은 01부터 시작하며, 번호가 70에 도달하면 분반이 +1되고 번호는 01로 초기화된다.
  */
 export function computeExamNumbers(registrations: RegistrationForExamNumber[]): Map<string, string> {
   const result = new Map<string, string>();
@@ -22,7 +22,9 @@ export function computeExamNumbers(registrations: RegistrationForExamNumber[]): 
     byRegion.set(reg.region, list);
   }
 
-  // 각 지역에서 created_at 순 정렬 후 순번 부여
+  const MAX_PER_CLASS = 70;
+
+  // 각 지역에서 created_at 순 정렬 후 분반+번호 부여
   for (const [region, list] of byRegion) {
     const regionCode = examRegionCodeMap[region];
     if (!regionCode) continue;
@@ -31,11 +33,11 @@ export function computeExamNumbers(registrations: RegistrationForExamNumber[]): 
     list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     for (let i = 0; i < list.length; i++) {
-      const seq = i + 1;
-      const seqStr = list.length >= 1000
-        ? String(seq).padStart(4, '0')
-        : String(seq).padStart(3, '0');
-      result.set(list[i].id, `11${regionCode}${seqStr}`);
+      const classNum = Math.floor(i / MAX_PER_CLASS) + 1;  // 분반: 01부터
+      const seatNum = (i % MAX_PER_CLASS) + 1;              // 번호: 01~70
+      const classStr = String(classNum).padStart(2, '0');
+      const seatStr = String(seatNum).padStart(2, '0');
+      result.set(list[i].id, `11${classStr}${seatStr}${regionCode}`);
     }
   }
 

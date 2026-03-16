@@ -20,8 +20,11 @@ CREATE TABLE registrations (
   name TEXT NOT NULL,
   school TEXT NOT NULL,
   grade INTEGER NOT NULL CHECK (grade BETWEEN 1 AND 3),
+  class_name TEXT,
   phone TEXT NOT NULL,
   email TEXT,
+  birthdate DATE,
+  photo_url TEXT,
   region TEXT NOT NULL,
   registration_type TEXT NOT NULL CHECK (registration_type IN ('individual', 'group')),
   group_id UUID REFERENCES groups(id) ON DELETE SET NULL,
@@ -108,5 +111,14 @@ CREATE POLICY "Anyone can view edit_logs"
 CREATE POLICY "Anyone can insert edit_logs"
   ON edit_logs FOR INSERT WITH CHECK (true);
 
--- 7. 실시간 구독 활성화
+-- 7. Storage 정책 (photos 버킷)
+CREATE POLICY "Allow public uploads"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'photos');
+
+CREATE POLICY "Allow public reads"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'photos');
+
+-- 8. 실시간 구독 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE registrations;

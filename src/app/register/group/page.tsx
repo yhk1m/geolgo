@@ -264,7 +264,9 @@ export default function GroupRegisterPage() {
           const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
           const { error: uploadError } = await supabase.storage
             .from('photos')
-            .upload(fileName, p.photoFile);
+            .upload(fileName, p.photoFile, {
+              contentType: p.photoFile.type,
+            });
           if (uploadError) throw uploadError;
           const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
           return urlData.publicUrl;

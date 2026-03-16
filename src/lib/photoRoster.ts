@@ -9,7 +9,11 @@ export interface RosterEntry {
   photo_url: string | null;
 }
 
-export async function downloadPhotoRosterPDF(entries: RosterEntry[], regionName: string) {
+export async function downloadPhotoRosterPDF(
+  entries: RosterEntry[],
+  regionName: string,
+  onProgress?: (current: number, total: number) => void,
+) {
   if (entries.length === 0) return;
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -92,6 +96,7 @@ export async function downloadPhotoRosterPDF(entries: RosterEntry[], regionName:
               // photo load failed
             }
           }
+          onProgress?.(idx + 1, entries.length);
         } else {
           doc.setFillColor(240, 240, 240);
           doc.setLineWidth(lineW);

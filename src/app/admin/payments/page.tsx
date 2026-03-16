@@ -92,6 +92,7 @@ export default function PaymentsPage() {
   const [locationDraft, setLocationDraft] = useState<Record<string, ExamLocationInfo>>({});
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [rosterRegion, setRosterRegion] = useState('');
+  const [rosterProgress, setRosterProgress] = useState<{ current: number; total: number } | null>(null);
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [detailTarget, setDetailTarget] = useState<Registration | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -443,6 +444,7 @@ export default function PaymentsPage() {
     const base = target === 'all' ? data : target === 'pending' ? pending : confirmed;
     const label = target === 'all' ? '전체명단' : target === 'pending' ? '입금대기' : '입금확인';
     const rows = base.map(r => ({
+      '수험번호': examNumbers.get(r.id) || '-',
       '이름': r.name,
       '학교': r.school,
       '학년': r.grade,
@@ -479,7 +481,11 @@ export default function PaymentsPage() {
     }));
 
     const name = regionShortMap[rosterRegion] || regionNameMap[rosterRegion] || rosterRegion;
-    await downloadPhotoRosterPDF(entries, name);
+    setRosterProgress({ current: 0, total: entries.length });
+    await downloadPhotoRosterPDF(entries, name, (current, total) => {
+      setRosterProgress({ current, total });
+    });
+    setRosterProgress(null);
     setShowRosterModal(false);
   }
 
@@ -1034,6 +1040,10 @@ export default function PaymentsPage() {
             <h3 className="text-lg font-semibold mb-4 text-[#111]">참가자 정보</h3>
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">수험번호</span>
+                <span className="text-[#111] font-mono font-medium">{examNumbers.get(detailTarget.id) || '-'}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
                 <span className="text-[#999]">이름</span>
                 <span className="text-[#111] font-medium">{detailTarget.name}</span>
               </div>
@@ -1219,24 +1229,40 @@ export default function PaymentsPage() {
                 );
               })}
             </select>
-            {rosterRegion && (
+            {rosterRegion && !rosterProgress && (
               <p className="text-sm text-[#666] mb-4">
                 입금 확인된 {confirmed.filter(r => r.region === rosterRegion).length}명의 명렬표를 생성합니다.
               </p>
             )}
+            {rosterProgress && (
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-[#666] mb-1.5">
+                  <span>명렬표 생성 중...</span>
+                  <span>{rosterProgress.current} / {rosterProgress.total}</span>
+                </div>
+                <div className="w-full h-2 bg-[#e5e5e5] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#111] rounded-full transition-all duration-150"
+                    style={{ width: `${(rosterProgress.current / rosterProgress.total) * 100}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[#999] mt-1.5">사진을 불러오고 있습니다. 잠시만 기다려주세요.</p>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowRosterModal(false)}
-                className="px-4 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-md hover:bg-[#f5f5f5]"
+                disabled={!!rosterProgress}
+                className="px-4 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-md hover:bg-[#f5f5f5] disabled:opacity-40"
               >
                 취소
               </button>
               <button
                 onClick={handleDownloadRoster}
-                disabled={!rosterRegion}
+                disabled={!rosterRegion || !!rosterProgress}
                 className="px-4 py-2 text-sm text-white bg-[#111] rounded-md hover:bg-[#333] disabled:opacity-40"
               >
-                다운로드
+                {rosterProgress ? '생성 중...' : '다운로드'}
               </button>
             </div>
           </div>

@@ -47,11 +47,16 @@ src/
 │   └── globals.css                # 전역 스타일
 ├── components/
 │   ├── Navigation.tsx             # 상단 네비게이션
+│   ├── Footer.tsx                 # 하단 푸터
 │   └── RegionMap.tsx              # 지도 시각화 컴포넌트
 ├── lib/
 │   ├── supabase.ts                # Supabase 클라이언트 설정
 │   ├── mockdata.ts                # Mock 데이터 생성기
-│   └── regions.ts                 # 17개 광역자치단체 데이터
+│   ├── regions.ts                 # 17개 광역자치단체 데이터
+│   ├── examNumber.ts              # 수험번호 생성/관리
+│   ├── examTicket.ts              # 수험표 생성
+│   ├── pdfFont.ts                 # PDF 폰트 설정
+│   └── photoRoster.ts             # 사진대장 생성
 public/
 └── geo/
     └── korea_sido_final.geojson   # 대한민국 시도 GeoJSON
@@ -157,6 +162,31 @@ public/
 | payment_status | TEXT | 'pending' 또는 'confirmed' |
 | payment_amount | INTEGER | 참가비 (기본 20,000) |
 | created_at | TIMESTAMPTZ | 신청일시 |
+
+### `exam_locations` 테이블
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| region | TEXT (PK) | 지역 (영문) |
+| school_name | TEXT | 시험장 학교명 |
+| address | TEXT | 시험장 주소 |
+| created_at | TIMESTAMPTZ | 생성일시 |
+| updated_at | TIMESTAMPTZ | 수정일시 |
+
+### `edit_logs` 테이블
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | UUID (PK) | 로그 ID |
+| registration_id | UUID (FK) | 대상 등록 ID |
+| changed_fields | JSONB | 변경된 필드 내역 |
+| created_at | TIMESTAMPTZ | 변경일시 |
+
+### Storage
+
+- **`photos` 버킷** (public): 참가자 사진 파일 저장
+
+### 정책 및 설정
 
 - **RLS** 활성화: 공개 읽기/삽입, service role 업데이트
 - **Realtime** 활성화: registrations 테이블 변경 구독
@@ -367,3 +397,30 @@ Supabase가 설정되지 않은 환경(`isSupabaseConfigured === false`)에서 �
 | 개인 입금자명 | 소속고 이름 (예: ○○고 김○○) |
 | 단체 입금자명 | 학교명 (예: ○○고) |
 | 참가비 | 1인 20,000원 |
+
+---
+
+## Supabase 계정 이관 이력
+
+### 2026-03-11: Supabase 프로젝트 이관
+
+| 항목 | 이전 | 이후 |
+|---|---|---|
+| 프로젝트 ID | `abcrkyekmhulqniyujpf` | `umwoeqwbvxeygmdwninc` |
+| URL | `https://abcrkyekmhulqniyujpf.supabase.co` | `https://umwoeqwbvxeygmdwninc.supabase.co` |
+
+#### 이관 절차
+
+1. 새 Supabase 프로젝트에서 `supabase_schema.sql` 실행 (테이블 4개 + RLS + 인덱스 + Realtime)
+2. Storage에서 `photos` 버킷 생성 (public)
+3. `.env.local` 환경변수 업데이트 (URL + Anon Key)
+4. Vercel 환경변수 업데이트 + Redeploy
+
+- 빈 DB로 새로 시작 (기존 데이터 미이관)
+
+#### 환경변수 설정 위치
+
+| 환경 | 위치 |
+|---|---|
+| 로컬 개발 | `.env.local` |
+| 프로덕션 (Vercel) | Vercel Dashboard → Settings → Environment Variables |
