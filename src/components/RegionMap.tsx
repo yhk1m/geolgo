@@ -193,7 +193,7 @@ export default function RegionMap({ data }: RegionMapProps) {
     const countPieces = makeQuantilePieces(sortedData.map(d => d.value));
     const ratePieces = makeQuantilePieces(rateData.map(d => d.value));
 
-    // 연한 색상(1~2단계) 지역은 테두리를 짙게
+    // 1~2단계는 짙은 테두리, 3~5단계는 옅은 테두리
     const LIGHT_COLORS = new Set([QUANTILE_COLORS[0], QUANTILE_COLORS[1]]);
     function addBorderStyle(
       dataList: { name: string; value: number }[],
@@ -204,7 +204,9 @@ export default function RegionMap({ data }: RegionMapProps) {
         const isLight = piece && LIGHT_COLORS.has(piece.color);
         return {
           ...d,
-          itemStyle: isLight ? { borderColor: '#999', borderWidth: 1 } : undefined,
+          itemStyle: isLight
+            ? { borderColor: '#999', borderWidth: 1 }
+            : { borderColor: '#fff', borderWidth: 1 },
         };
       });
     }
