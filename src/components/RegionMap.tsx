@@ -343,20 +343,10 @@ export default function RegionMap({ data }: RegionMapProps) {
     if (viewMode !== 'bar') {
       setTimeout(updateScaleBar, 100);
       chart.on('georoam', updateScaleBar);
-
-      // 독도 호버 시 경상북도 하이라이트
-      chart.on('mouseover', { componentType: 'markPoint' }, () => {
-        chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: 'Gyeongsangbuk-do' });
-      });
-      chart.on('mouseout', { componentType: 'markPoint' }, () => {
-        chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: 'Gyeongsangbuk-do' });
-      });
     }
 
     return () => {
       chart.off('georoam');
-      chart.off('mouseover');
-      chart.off('mouseout');
     };
   }, [viewMode, geoLoaded, sortedData, rateData, updateScaleBar]);
 
