@@ -154,7 +154,14 @@ export default function RegionMap({ data }: RegionMapProps) {
       },
       emphasis: {
         itemStyle: { areaColor: '#333' },
-        label: { color: '#fff' },
+        label: {
+          show: true,
+          color: '#fff',
+          formatter: (params: unknown) => {
+            const p = params as { name: string };
+            return regionNameMap[p.name] || p.name;
+          },
+        },
       },
       markLine: graticuleMarkLine,
     };
@@ -186,6 +193,22 @@ export default function RegionMap({ data }: RegionMapProps) {
     const countPieces = makeQuantilePieces(sortedData.map(d => d.value));
     const ratePieces = makeQuantilePieces(rateData.map(d => d.value));
 
+    // 연한 색상(1~2단계) 지역은 테두리를 짙게
+    const LIGHT_COLORS = new Set([QUANTILE_COLORS[0], QUANTILE_COLORS[1]]);
+    function addBorderStyle(
+      dataList: { name: string; value: number }[],
+      pieces: { min: number; max: number; color: string }[],
+    ) {
+      return dataList.map(d => {
+        const piece = pieces.find(p => d.value >= p.min && d.value < p.max);
+        const isLight = piece && LIGHT_COLORS.has(piece.color);
+        return {
+          ...d,
+          itemStyle: isLight ? { borderColor: '#999', borderWidth: 1 } : undefined,
+        };
+      });
+    }
+
     const visualMapBase = {
       type: 'piecewise' as const,
       right: 10,
@@ -215,7 +238,7 @@ export default function RegionMap({ data }: RegionMapProps) {
           type: 'map',
           animationDurationUpdate: 1000,
           universalTransition: true,
-          data: sortedData,
+          data: addBorderStyle(sortedData, countPieces),
           markPoint: makeDokdoMarkPoint(
             `<strong>경상북도</strong><br/>신청자: ${sortedData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
           ),
@@ -244,7 +267,7 @@ export default function RegionMap({ data }: RegionMapProps) {
           type: 'map',
           animationDurationUpdate: 1000,
           universalTransition: true,
-          data: rateData,
+          data: addBorderStyle(rateData, ratePieces),
           markPoint: makeDokdoMarkPoint(
             `<strong>경상북도</strong><br/>만명당 신청률: ${rateData.find(d => d.name === 'Gyeongsangbuk-do')?.value || 0}명`
           ),
@@ -331,7 +354,7 @@ export default function RegionMap({ data }: RegionMapProps) {
     }
 
     return () => {
-      chart.off('georoam', updateScaleBar);
+      chart.off('georoam');
       chart.off('mouseover');
       chart.off('mouseout');
     };
