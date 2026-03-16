@@ -24,17 +24,31 @@ function makeQuantilePieces(values: number[]) {
     const idx = Math.round((i / numClasses) * n) - 1;
     breaks.push(sorted[Math.min(idx, n - 1)]);
   }
-  const pieces = [];
+
+  // 중복 경계를 제거하여 실제 구분되는 구간만 추출
+  const rawPieces: { min: number; max: number }[] = [];
   for (let i = 0; i < numClasses; i++) {
     const min = i === 0 ? 0 : breaks[i - 1];
     const max = i === numClasses - 1 ? sorted[n - 1] + 1 : breaks[i];
-    pieces.push({
-      min,
-      max,
-      color: QUANTILE_COLORS[i],
-      label: i === 0 ? `${max} 이하` : i === numClasses - 1 ? `${min} 이상` : `${min} ~ ${max}`,
-    });
+    if (rawPieces.length > 0 && rawPieces[rawPieces.length - 1].max === max) continue;
+    rawPieces.push({ min: rawPieces.length === 0 ? 0 : rawPieces[rawPieces.length - 1].max, max });
   }
+
+  // 실제 구간 수에 맞춰 색상을 1~5단계에서 골고루 분배
+  // 예: 2구간 → 1,5단계 / 3구간 → 1,3,5단계 / 4구간 → 1,2,4,5단계
+  const distinctCount = rawPieces.length;
+  const pieces = rawPieces.map((p, i) => {
+    const colorIdx = distinctCount === 1 ? 0
+      : Math.round(i * (numClasses - 1) / (distinctCount - 1));
+    return {
+      min: p.min,
+      max: p.max,
+      color: QUANTILE_COLORS[colorIdx],
+      label: i === 0 ? `${p.max} 이하`
+        : i === distinctCount - 1 ? `${p.min} 이상`
+        : `${p.min} ~ ${p.max}`,
+    };
+  });
   return pieces;
 }
 
