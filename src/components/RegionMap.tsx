@@ -11,6 +11,7 @@ interface RegionData {
 
 interface RegionMapProps {
   data: RegionData[];
+  onRegionClick?: (regionName: string | null) => void;
 }
 
 const QUANTILE_COLORS = ['#f0f0f0', '#cccccc', '#888888', '#444444', '#000000'];
@@ -52,7 +53,7 @@ function makeQuantilePieces(values: number[]) {
   return pieces;
 }
 
-export default function RegionMap({ data }: RegionMapProps) {
+export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [viewMode, setViewMode] = useState<'map-count' | 'map-rate' | 'bar'>('map-count');
@@ -163,6 +164,18 @@ export default function RegionMap({ data }: RegionMapProps) {
           },
         },
       },
+      select: {
+        itemStyle: { areaColor: '#facc15' },
+        label: {
+          show: true,
+          color: '#111',
+          formatter: (params: unknown) => {
+            const p = params as { name: string };
+            return regionNameMap[p.name] || p.name;
+          },
+        },
+      },
+      selectedMode: 'single' as const,
       markLine: graticuleMarkLine,
     };
 
@@ -347,10 +360,25 @@ export default function RegionMap({ data }: RegionMapProps) {
       chart.on('georoam', updateScaleBar);
     }
 
+    if (onRegionClick && viewMode !== 'bar') {
+      chart.on('selectchanged', (params: unknown) => {
+        const p = params as { fromAction: string; selected: { dataIndex: number[] }[] };
+        const selectedIndices = p.selected?.[0]?.dataIndex || [];
+        if (selectedIndices.length > 0) {
+          const idx = selectedIndices[0];
+          const currentData = viewMode === 'map-rate' ? rateData : sortedData;
+          onRegionClick(currentData[idx]?.name || null);
+        } else {
+          onRegionClick(null);
+        }
+      });
+    }
+
     return () => {
       chart.off('georoam');
+      chart.off('selectchanged');
     };
-  }, [viewMode, geoLoaded, sortedData, rateData, updateScaleBar]);
+  }, [viewMode, geoLoaded, sortedData, rateData, updateScaleBar, onRegionClick]);
 
   return (
     <div>

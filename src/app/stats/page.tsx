@@ -25,6 +25,7 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey !== key) {
@@ -132,7 +133,7 @@ export default function StatsPage() {
       ) : (
         <>
           <div className="mb-12 p-6 bg-white rounded-lg border border-[#e5e5e5]">
-            <RegionMap data={mapData} />
+            <RegionMap data={mapData} onRegionClick={setSelectedRegion} />
           </div>
 
           <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-x-auto">
@@ -159,7 +160,7 @@ export default function StatsPage() {
               </thead>
               <tbody>
                 {sortedStats.map((r, i) => (
-                  <tr key={r.name}>
+                  <tr key={r.name} className={selectedRegion === r.name ? 'bg-yellow-100' : ''}>
                     <td className="text-[#999]">{i + 1}</td>
                     <td className="font-medium text-[#111] whitespace-nowrap">
                       <span className="sm:hidden">{regionShortMap[r.name] || r.nameKo}</span>
