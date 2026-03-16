@@ -13,7 +13,7 @@ interface RegionMapProps {
   data: RegionData[];
 }
 
-const QUANTILE_COLORS = ['#e0e0e0', '#bfbfbf', '#808080', '#404040', '#000000'];
+const QUANTILE_COLORS = ['#f0f0f0', '#cccccc', '#888888', '#444444', '#000000'];
 
 function makeQuantilePieces(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b);
