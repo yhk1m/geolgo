@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
+import { resizeImage } from '@/lib/resizeImage';
 
 interface Participant {
   name: string;
@@ -135,7 +136,7 @@ export default function GroupRegisterPage() {
     );
   };
 
-  const updateParticipantPhoto = (index: number, file: File | null) => {
+  const updateParticipantPhoto = async (index: number, file: File | null) => {
     if (file) {
       if (!file.type.startsWith('image/')) {
         alert('이미지 파일만 업로드 가능합니다.');
@@ -145,13 +146,14 @@ export default function GroupRegisterPage() {
         alert('파일 크기는 5MB 이하여야 합니다.');
         return;
       }
+      const resized = await resizeImage(file);
       const reader = new FileReader();
       reader.onload = (ev) => {
         setParticipants(prev =>
-          prev.map((p, i) => i === index ? { ...p, photoFile: file, photoPreview: ev.target?.result as string } : p)
+          prev.map((p, i) => i === index ? { ...p, photoFile: resized, photoPreview: ev.target?.result as string } : p)
         );
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(resized);
     } else {
       setParticipants(prev =>
         prev.map((p, i) => i === index ? { ...p, photoFile: null, photoPreview: null } : p)
@@ -193,21 +195,22 @@ export default function GroupRegisterPage() {
       if (!file.type.startsWith('image/')) continue;
       if (file.size > 5 * 1024 * 1024) continue;
 
+      const resized = await resizeImage(file);
       const name = file.name.replace(/\.[^.]+$/, '').trim();
       const matchingIndices = newParticipants
         .map((p, i) => p.name.trim() === name ? i : -1)
         .filter(i => i !== -1);
 
       if (matchingIndices.length === 1) {
-        const preview = await readFileAsDataURL(file);
+        const preview = await readFileAsDataURL(resized);
         newParticipants[matchingIndices[0]] = {
           ...newParticipants[matchingIndices[0]],
-          photoFile: file,
+          photoFile: resized,
           photoPreview: preview,
         };
       } else if (matchingIndices.length > 1) {
-        const preview = await readFileAsDataURL(file);
-        conflicts.push({ file, preview, name, matchingIndices });
+        const preview = await readFileAsDataURL(resized);
+        conflicts.push({ file: resized, preview, name, matchingIndices });
       }
     }
 

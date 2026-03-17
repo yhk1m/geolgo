@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
+import { resizeImage } from '@/lib/resizeImage';
 
 export default function IndividualRegisterPage() {
   const [form, setForm] = useState({
@@ -61,7 +62,7 @@ export default function IndividualRegisterPage() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -74,10 +75,11 @@ export default function IndividualRegisterPage() {
       return;
     }
 
-    setPhotoFile(file);
+    const resized = await resizeImage(file);
+    setPhotoFile(resized);
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(resized);
   };
 
   const removePhoto = () => {

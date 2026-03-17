@@ -8,6 +8,7 @@ import { regionNameMap, regionShortMap, REGIONS } from '@/lib/regions';
 import { computeExamNumbers } from '@/lib/examNumber';
 import { downloadExamTicketPDF } from '@/lib/examTicket';
 import type { ExamLocationInfo } from '@/lib/examTicket';
+import { resizeImage } from '@/lib/resizeImage';
 import { downloadPhotoRosterPDF } from '@/lib/photoRoster';
 import type { RosterEntry } from '@/lib/photoRoster';
 import * as XLSX from 'xlsx';
@@ -87,6 +88,10 @@ export default function PaymentsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [deleteMode, setDeleteMode] = useState<'trash' | 'permanent'>('trash');
+  const [restoreTargetIds, setRestoreTargetIds] = useState<string[]>([]);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restorePasswordInput, setRestorePasswordInput] = useState('');
+  const [restorePasswordError, setRestorePasswordError] = useState('');
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [examLocations, setExamLocations] = useState<Record<string, ExamLocationInfo>>({});
   const [locationDraft, setLocationDraft] = useState<Record<string, ExamLocationInfo>>({});
@@ -273,14 +278,27 @@ export default function PaymentsPage() {
     setDeleteTargetIds([]);
   }
 
-  async function restoreFromTrash(ids: string[]) {
-    const idsToRestore = [...ids];
+  function requestRestore(ids: string[]) {
+    setRestoreTargetIds(ids);
+    setRestorePasswordInput('');
+    setRestorePasswordError('');
+    setShowRestoreModal(true);
+  }
+
+  async function executeRestore() {
+    if (restorePasswordInput !== 'admin0220') {
+      setRestorePasswordError('비밀번호가 올바르지 않습니다.');
+      return;
+    }
+    setShowRestoreModal(false);
+
+    const idsToRestore = [...restoreTargetIds];
     if (isSupabaseConfigured) {
       const { error } = await supabase
         .from('registrations')
         .update({ payment_status: 'pending' })
         .in('id', idsToRestore);
-      if (error) return;
+      if (error) { alert('복원에 실패했습니다: ' + error.message); return; }
     } else {
       restoreMockRegistrations(idsToRestore);
     }
@@ -288,6 +306,7 @@ export default function PaymentsPage() {
       idsToRestore.includes(r.id) ? { ...r, payment_status: 'pending' } : r
     ));
     setSelected(new Set());
+    setRestoreTargetIds([]);
   }
 
   async function confirmPayment(id: string) {
@@ -580,9 +599,10 @@ export default function PaymentsPage() {
 
       // 사진 변경 처리
       if (editPhotoFile && isSupabaseConfigured) {
-        const ext = editPhotoFile.name.split('.').pop();
+        const resized = await resizeImage(editPhotoFile);
+        const ext = resized.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('photos').upload(fileName, editPhotoFile);
+        const { error: uploadError } = await supabase.storage.from('photos').upload(fileName, resized);
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
         updates.photo_url = urlData.publicUrl;
@@ -783,7 +803,7 @@ export default function PaymentsPage() {
         {isTrashTab && selected.size > 0 && (
           <div className="flex items-center gap-2 sm:ml-auto">
             <button
-              onClick={() => restoreFromTrash(Array.from(selected))}
+              onClick={() => requestRestore(Array.from(selected))}
               className="text-xs sm:text-sm px-4 py-1.5 text-white bg-[#111] hover:bg-[#333] rounded-md"
             >
               선택 복원 ({selected.size}명)
@@ -1027,6 +1047,46 @@ export default function PaymentsPage() {
                 className="px-4 py-2 text-sm text-white bg-[#c00] rounded-md hover:bg-[#a00]"
               >
                 {deleteMode === 'permanent' ? '영구 삭제' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 복원 확인 모달 */}
+      {showRestoreModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[360px] shadow-xl">
+            <h3 className="text-lg font-bold mb-2 text-[#111]">복원 확인</h3>
+            <p className="text-sm text-[#666] mb-4">
+              {restoreTargetIds.length}건을 복원합니다.
+              <br />관리자 비밀번호를 입력해주세요.
+            </p>
+            <input
+              type="password"
+              value={restorePasswordInput}
+              onChange={e => { setRestorePasswordInput(e.target.value); setRestorePasswordError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') executeRestore(); }}
+              placeholder="비밀번호"
+              className="w-full mb-2"
+              autoFocus
+              autoComplete="new-password"
+            />
+            {restorePasswordError && (
+              <p className="text-xs text-[#c00] mb-2">{restorePasswordError}</p>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowRestoreModal(false)}
+                className="px-4 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-md hover:bg-[#f5f5f5]"
+              >
+                취소
+              </button>
+              <button
+                onClick={executeRestore}
+                className="px-4 py-2 text-sm text-white bg-[#111] rounded-md hover:bg-[#333]"
+              >
+                복원
               </button>
             </div>
           </div>
