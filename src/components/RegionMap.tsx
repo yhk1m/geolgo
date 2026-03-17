@@ -141,9 +141,9 @@ export default function RegionMap({ data, onRegionClick }: RegionMapProps) {
         [{ name: '34°N', coord: [123, 34] }, { coord: [133, 34] }],
         [{ name: '36°N', coord: [123, 36] }, { coord: [133, 36] }],
         [{ name: '38°N', coord: [123, 38] }, { coord: [133, 38] }],
-        [{ name: '126°E', coord: [126, 33.5] }, { coord: [126, 39] }],
-        [{ name: '128°E', coord: [128, 33.5] }, { coord: [128, 39] }],
-        [{ name: '130°E', coord: [130, 33.5] }, { coord: [130, 39] }],
+        [{ name: '126°E', coord: [126, 32.8] }, { coord: [126, 39] }],
+        [{ name: '128°E', coord: [128, 32.8] }, { coord: [128, 39] }],
+        [{ name: '130°E', coord: [130, 32.8] }, { coord: [130, 39] }],
       ],
     };
 
