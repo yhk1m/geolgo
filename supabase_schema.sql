@@ -120,5 +120,23 @@ CREATE POLICY "Allow public reads"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'photos');
 
--- 8. 실시간 구독 활성화
+-- 8. 페이지 콘텐츠 테이블
+CREATE TABLE page_content (
+  id TEXT PRIMARY KEY DEFAULT 'main',
+  content JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE page_content ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view page_content"
+  ON page_content FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert page_content"
+  ON page_content FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update page_content"
+  ON page_content FOR UPDATE USING (true) WITH CHECK (true);
+
+-- 9. 실시간 구독 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE registrations;

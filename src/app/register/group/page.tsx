@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 import { resizeImage } from '@/lib/resizeImage';
+import { fetchPageContent } from '@/lib/pageContent';
+import Link from 'next/link';
 
 interface Participant {
   name: string;
@@ -73,6 +75,32 @@ function parseCSV(text: string): Participant[] {
 }
 
 export default function GroupRegisterPage() {
+  const [periodOpen, setPeriodOpen] = useState<boolean | null>(null);
+  const [periodMessage, setPeriodMessage] = useState('');
+  const [groupGuideUrl, setGroupGuideUrl] = useState<string | undefined>();
+
+  useEffect(() => {
+    fetchPageContent().then(content => {
+      setGroupGuideUrl(content.groupGuideUrl);
+      const period = content.registrationPeriod;
+      if (!period?.startDate || !period?.endDate) {
+        setPeriodOpen(true);
+        return;
+      }
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      if (today < period.startDate) {
+        setPeriodOpen(false);
+        setPeriodMessage(`참가 신청 기간이 아닙니다. (${period.startDate} 부터 접수 가능)`);
+      } else if (today > period.endDate) {
+        setPeriodOpen(false);
+        setPeriodMessage(`참가 신청이 마감되었습니다. (${period.endDate} 마감)`);
+      } else {
+        setPeriodOpen(true);
+      }
+    });
+  }, []);
+
   const [teacher, setTeacher] = useState({
     name: '',
     phone: '',
@@ -330,9 +358,35 @@ export default function GroupRegisterPage() {
 
   const totalAmount = participants.length * 20000;
 
+  if (periodOpen === null) {
+    return <div className="text-center py-20 text-[#999]">로딩 중...</div>;
+  }
+
+  if (periodOpen === false) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-20 text-center">
+        <h1 className="text-2xl font-bold mb-4 text-[#111]">학교 단체 접수</h1>
+        <p className="text-[#666] mb-6">{periodMessage}</p>
+        <Link href="/" className="btn btn-secondary px-6 py-2">메인으로 돌아가기</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-      <h1 className="text-3xl font-bold mb-2 text-[#111]">학교 단체 접수</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold text-[#111]">학교 단체 접수</h1>
+        {groupGuideUrl && (
+          <a
+            href={groupGuideUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary text-sm px-4 py-1.5"
+          >
+            업로드 방법 안내
+          </a>
+        )}
+      </div>
       <p className="text-[#666] mb-10">지도교사가 학생들을 일괄 신청합니다.</p>
 
       {result && (
@@ -352,6 +406,7 @@ export default function GroupRegisterPage() {
                   <p className="font-medium text-sm">(사)대한지리학회 국민은행 477401-01-176602</p>
                   <p className="text-xs text-[#999] mt-2">입금자명: 학교명 (예: ○○고)</p>
                 </div>
+                <p className="text-xs font-bold text-[#111] text-center mb-4">입금 확인까지 1~2일 정도 소요될 수 있습니다.</p>
                 <button
                   type="button"
                   onClick={() => setResult(null)}

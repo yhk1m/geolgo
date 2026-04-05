@@ -1,9 +1,10 @@
+// © 2026 김용현
 'use client';
 
 import { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getMockRegistrations, getMockExamLocations } from '@/lib/mockdata';
-import { regionNameMap } from '@/lib/regions';
+import { regionNameMap, REGIONS } from '@/lib/regions';
 import { computeExamNumbers } from '@/lib/examNumber';
 import { downloadExamTicketPDF } from '@/lib/examTicket';
 import type { ExamLocationInfo } from '@/lib/examTicket';
@@ -25,6 +26,17 @@ interface Registration {
   class_name?: string | null;
 }
 
+interface EditDraft {
+  name: string;
+  school: string;
+  grade: string;
+  class_name: string;
+  phone: string;
+  email: string;
+  birthdate: string;
+  region: string;
+}
+
 export default function CheckPage() {
   const [name, setName] = useState('');
   const [birthdate, setBirthdate] = useState('');
@@ -33,6 +45,9 @@ export default function CheckPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   // Mock 모드일 때 샘플 3개 추출
   const mockSamples = !isSupabaseConfigured
@@ -44,6 +59,8 @@ export default function CheckPage() {
     setSearching(true);
     setError('');
     setResults(null);
+    setEditingId(null);
+    setEditDraft(null);
 
     const normalize = (p: string) => p.replace(/-/g, '');
 
@@ -75,10 +92,85 @@ export default function CheckPage() {
     }
   };
 
+  function startEdit(reg: Registration) {
+    setEditingId(reg.id);
+    setEditDraft({
+      name: reg.name,
+      school: reg.school,
+      grade: String(reg.grade),
+      class_name: reg.class_name || '',
+      phone: reg.phone,
+      email: reg.email || '',
+      birthdate: reg.birthdate || '',
+      region: reg.region,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  async function saveEdit(reg: Registration) {
+    if (!editDraft) return;
+    setEditSaving(true);
+
+    try {
+      const fieldLabels: Record<string, string> = {
+        name: '이름', school: '학교', grade: '학년', class_name: '반',
+        phone: '전화번호', email: '이메일', birthdate: '생년월일', region: '지역',
+      };
+      const changes: Record<string, { old: string; new: string }> = {};
+      const updates: Record<string, string | number | null> = {};
+
+      for (const key of Object.keys(editDraft) as (keyof EditDraft)[]) {
+        const oldVal = key === 'grade' ? String(reg.grade)
+          : key === 'class_name' ? (reg.class_name || '')
+          : key === 'email' ? (reg.email || '')
+          : key === 'birthdate' ? (reg.birthdate || '')
+          : (reg as unknown as Record<string, string>)[key] || '';
+        const newVal = editDraft[key];
+        if (oldVal !== newVal) {
+          changes[fieldLabels[key] || key] = { old: oldVal, new: newVal };
+          if (key === 'grade') updates[key] = parseInt(newVal);
+          else if (key === 'email' || key === 'birthdate' || key === 'class_name') updates[key] = newVal || null;
+          else updates[key] = newVal;
+        }
+      }
+
+      if (Object.keys(changes).length === 0) {
+        setEditingId(null);
+        setEditDraft(null);
+        return;
+      }
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from('registrations')
+          .update(updates)
+          .eq('id', reg.id);
+        if (error) throw error;
+
+        await supabase.from('edit_logs').insert({
+          registration_id: reg.id,
+          changed_fields: { ...changes, _edited_by: { old: '', new: '본인 수정' } },
+        });
+      }
+
+      setResults(prev => prev?.map(r => r.id === reg.id ? { ...r, ...updates } as Registration : r) || null);
+      setEditingId(null);
+      setEditDraft(null);
+      alert('수정이 완료되었습니다.');
+    } catch {
+      alert('수정 중 오류가 발생했습니다.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   async function handleDownloadTicket(reg: Registration) {
     setDownloading(true);
     try {
-      // 수험번호 계산을 위해 해당 지역의 전체 등록 데이터 조회
       let allRegistrations: Registration[];
 
       if (isSupabaseConfigured) {
@@ -93,7 +185,6 @@ export default function CheckPage() {
 
       const examNumbers = computeExamNumbers(allRegistrations);
 
-      // 시험장소 조회
       let examLocations: Record<string, ExamLocationInfo> = {};
       if (isSupabaseConfigured) {
         const { data: locations } = await supabase
@@ -204,57 +295,137 @@ export default function CheckPage() {
                 <div key={reg.id} className="p-5 rounded-lg border border-[#e5e5e5] bg-[#fafafa]">
                   <div className="flex items-center justify-between mb-4">
                     <span className="font-semibold text-[#111]">{reg.name}</span>
-                    <span className={`badge ${
-                      reg.payment_status === 'confirmed' ? 'badge-confirmed' : 'badge-pending'
-                    }`}>
-                      {reg.payment_status === 'confirmed' ? '입금 확인' : '입금 대기'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-[#999]">학교</span>
-                      <p className="text-[#111]">{reg.school}</p>
-                    </div>
-                    <div>
-                      <span className="text-[#999]">학년</span>
-                      <p className="text-[#111]">{reg.grade}학년</p>
-                    </div>
-                    <div>
-                      <span className="text-[#999]">지역</span>
-                      <p className="text-[#111]">{regionNameMap[reg.region] || reg.region}</p>
-                    </div>
-                    <div>
-                      <span className="text-[#999]">접수 유형</span>
-                      <p className="text-[#111]">{reg.registration_type === 'group' ? '단체' : '개인'}</p>
-                    </div>
-                    <div>
-                      <span className="text-[#999]">참가비</span>
-                      <p className="text-[#111]">{reg.payment_amount?.toLocaleString()}원</p>
-                    </div>
-                    <div>
-                      <span className="text-[#999]">신청일</span>
-                      <p className="text-[#111]">
-                        {new Date(reg.created_at).toLocaleDateString('ko-KR')}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <span className={`badge ${
+                        reg.payment_status === 'confirmed' ? 'badge-confirmed' : 'badge-pending'
+                      }`}>
+                        {reg.payment_status === 'confirmed' ? '입금 확인' : '입금 대기'}
+                      </span>
+                      {editingId !== reg.id && (
+                        <button
+                          onClick={() => startEdit(reg)}
+                          className="text-xs text-[#666] hover:text-[#111] border border-[#e5e5e5] rounded px-2 py-1"
+                        >
+                          수정
+                        </button>
+                      )}
                     </div>
                   </div>
 
+                  {editingId === reg.id && editDraft ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <label className="block text-[#999] mb-1">이름</label>
+                          <input value={editDraft.name} onChange={e => setEditDraft({ ...editDraft, name: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">학교</label>
+                          <input value={editDraft.school} onChange={e => setEditDraft({ ...editDraft, school: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">학년</label>
+                          <select value={editDraft.grade} onChange={e => setEditDraft({ ...editDraft, grade: e.target.value })}>
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                            <option value="3">3학년</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">반</label>
+                          <input value={editDraft.class_name} onChange={e => setEditDraft({ ...editDraft, class_name: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">전화번호</label>
+                          <input value={editDraft.phone} onChange={e => setEditDraft({ ...editDraft, phone: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">이메일</label>
+                          <input value={editDraft.email} onChange={e => setEditDraft({ ...editDraft, email: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">생년월일</label>
+                          <input type="date" value={editDraft.birthdate} onChange={e => setEditDraft({ ...editDraft, birthdate: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-[#999] mb-1">지역</label>
+                          <select value={editDraft.region} onChange={e => setEditDraft({ ...editDraft, region: e.target.value })}>
+                            {REGIONS.map(r => (
+                              <option key={r.nameEn} value={r.nameEn}>{r.nameKo}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          onClick={() => saveEdit(reg)}
+                          disabled={editSaving}
+                          className="btn btn-primary text-sm px-4 py-1.5 disabled:opacity-50"
+                        >
+                          {editSaving ? '저장 중...' : '저장'}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="btn btn-secondary text-sm px-4 py-1.5"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-[#999]">학교</span>
+                        <p className="text-[#111]">{reg.school}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#999]">학년</span>
+                        <p className="text-[#111]">{reg.grade}학년</p>
+                      </div>
+                      <div>
+                        <span className="text-[#999]">지역</span>
+                        <p className="text-[#111]">{regionNameMap[reg.region] || reg.region}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#999]">접수 유형</span>
+                        <p className="text-[#111]">{reg.registration_type === 'group' ? '단체' : '개인'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#999]">참가비</span>
+                        <p className="text-[#111]">{reg.payment_amount?.toLocaleString()}원</p>
+                      </div>
+                      <div>
+                        <span className="text-[#999]">신청일</span>
+                        <p className="text-[#111]">
+                          {new Date(reg.created_at).toLocaleDateString('ko-KR')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 수험표 다운로드 영역 */}
-                  <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
-                    {reg.payment_status === 'confirmed' ? (
-                      <button
-                        onClick={() => handleDownloadTicket(reg)}
-                        disabled={downloading}
-                        className="btn btn-primary w-full py-2.5 text-sm disabled:opacity-50"
-                      >
-                        {downloading ? '수험표 생성 중...' : '수험표 다운로드'}
-                      </button>
-                    ) : (
-                      <p className="text-sm text-[#999] text-center">
-                        입금 확인 후 수험표를 다운로드할 수 있습니다.
-                      </p>
-                    )}
-                  </div>
+                  {editingId !== reg.id && (
+                    <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
+                      {reg.payment_status === 'confirmed' ? (
+                        <button
+                          onClick={() => handleDownloadTicket(reg)}
+                          disabled={downloading}
+                          className="btn btn-primary w-full py-2.5 text-sm disabled:opacity-50"
+                        >
+                          {downloading ? '수험표 생성 중...' : '수험표 다운로드'}
+                        </button>
+                      ) : (
+                        <div className="text-center">
+                          <p className="text-sm text-[#999]">
+                            입금 확인 후 수험표를 다운로드할 수 있습니다.
+                          </p>
+                          <p className="text-xs font-bold text-[#111] mt-1">
+                            입금 확인까지 1~2일 정도 소요될 수 있습니다.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

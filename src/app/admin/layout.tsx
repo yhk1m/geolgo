@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 const adminNav = [
   { href: '/admin/dashboard', label: '대시보드' },
   { href: '/admin/payments', label: '참가자 관리' },
+  { href: '/admin/content', label: '대회 안내 관리' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: block;
+  src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+}
+
 :root {
   --background: #ffffff;
   --foreground: #111111;
@@ -12,15 +20,16 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif;
+  --font-sans: 'Pretendard', sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif;
+  font-family: 'Pretendard', sans-serif;
   letter-spacing: -0.03em;
+  overflow-x: hidden;
 }
 
 /* Form styles */

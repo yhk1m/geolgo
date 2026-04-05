@@ -460,7 +460,7 @@ export default function PaymentsPage() {
   };
 
   function downloadExcel(target: 'all' | 'pending' | 'confirmed') {
-    const base = target === 'all' ? data : target === 'pending' ? pending : confirmed;
+    const base = target === 'all' ? activeData : target === 'pending' ? pending : confirmed;
     const label = target === 'all' ? '전체명단' : target === 'pending' ? '입금대기' : '입금확인';
     const rows = base.map(r => ({
       '수험번호': examNumbers.get(r.id) || '-',
@@ -718,7 +718,7 @@ export default function PaymentsPage() {
         <div className="flex items-center justify-between px-4 sm:px-5 py-3 rounded-lg border border-[#111] bg-[#111] text-white">
           <span className="text-sm text-[#888]">확인율</span>
           <span className="text-xl sm:text-2xl font-bold">
-            {data.length > 0 ? Math.round((confirmed.length / data.length) * 100) : 0}%
+            {activeData.length > 0 ? Math.round((confirmed.length / activeData.length) * 100) : 0}%
           </span>
         </div>
       </div>
@@ -732,7 +732,7 @@ export default function PaymentsPage() {
               tab === 'all' ? 'bg-[#111] text-white' : 'bg-white text-[#666]'
             }`}
           >
-            전체 ({data.length})
+            전체 ({activeData.length})
           </button>
           <button
             onClick={() => changeTab('pending')}
@@ -1149,16 +1149,23 @@ export default function PaymentsPage() {
               <div className="mt-4 pt-4 border-t border-[#e5e5e5]">
                 <h4 className="text-lg font-semibold text-[#111] mb-3">수정 이력</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {editLogs.map(log => (
-                    <div key={log.id} className="p-2 bg-[#fafafa] rounded border border-[#eee] text-xs">
-                      <p className="text-[#999] mb-1">{new Date(log.created_at).toLocaleString('ko-KR')}</p>
-                      {Object.entries(log.changed_fields).map(([field, val]) => (
-                        <p key={field} className="text-[#333]">
-                          <span className="font-medium">{field}</span>: <span className="text-[#c00] line-through">{val.old || '(없음)'}</span> → <span className="text-blue-600">{val.new || '(없음)'}</span>
+                  {editLogs.map(log => {
+                    const editedBy = log.changed_fields._edited_by?.new;
+                    const fields = Object.entries(log.changed_fields).filter(([k]) => k !== '_edited_by');
+                    return (
+                      <div key={log.id} className="p-2 bg-[#fafafa] rounded border border-[#eee] text-xs">
+                        <p className="text-[#999] mb-1">
+                          {new Date(log.created_at).toLocaleString('ko-KR')}
+                          {editedBy && <span className="ml-2 px-1.5 py-0.5 rounded bg-[#e5e5e5] text-[#666]">{editedBy}</span>}
                         </p>
-                      ))}
-                    </div>
-                  ))}
+                        {fields.map(([field, val]) => (
+                          <p key={field} className="text-[#333]">
+                            <span className="font-medium">{field}</span>: <span className="text-[#c00] line-through">{val.old || '(없음)'}</span> → <span className="text-blue-600">{val.new || '(없음)'}</span>
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
