@@ -30,7 +30,7 @@ export default function Footer() {
                 </tr>
                 <tr>
                   <td style={{ padding: "0 6px 0 0", textAlign: "justify", textAlignLast: "justify", width: "7.5em" }}>신청 시스템 문의</td>
-                  <td style={{ padding: 0 }}><a href="mailto:bgmlkim@gmail.com" className="underline hover:text-[#333] font-bold">bgmlkim@gmail.com</a></td>
+                  <td style={{ padding: 0 }}><a href="mailto:bgnlkim@gmail.com" className="underline hover:text-[#333] font-bold">bgnlkim@gmail.com</a></td>
                 </tr>
               </tbody>
             </table>
