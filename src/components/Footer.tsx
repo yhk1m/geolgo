@@ -36,7 +36,7 @@ export default function Footer() {
             </table>
             <div className="h-2.5" />
             <p>Copyright 2026. 전국지리교사연합회. All Right Reserved.</p>
-            <p>Powered by 양정고등학교 김용현.</p>
+            <p>Powered by 양정고등학교 김용현</p>
           </div>
         </div>
       </div>
