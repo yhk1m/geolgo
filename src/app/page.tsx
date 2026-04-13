@@ -120,12 +120,16 @@ export default async function HomePage() {
           ))}
         </div>
 
-        <div className="mt-6 rounded-lg border-[1.5px] border-[#c8c8c8] overflow-hidden overflow-x-auto">
-          {/* 모바일: 2열 리스트 */}
+        <div className="mt-6 rounded-lg border-[1.5px] border-[#c8c8c8] overflow-hidden">
+          {/* 모바일: 1열 리스트 (지역 → 이메일 세로 배치) */}
           <div className="sm:hidden">
+            <div className="bg-[#111] text-white px-4 py-2 text-sm font-medium flex justify-between">
+              <span>지역</span>
+              <span>담당자 이메일</span>
+            </div>
             {regions.map((r, i) => (
-              <div key={i} className={`flex justify-between px-4 py-2.5 text-sm ${i % 2 === 1 ? 'bg-[#f7f7f7]' : 'bg-white'}`}>
-                <span className="font-medium text-[#111]">{r.region}</span>
+              <div key={i} className={`flex justify-between items-center px-4 py-2.5 text-sm ${i % 2 === 1 ? 'bg-[#f7f7f7]' : 'bg-white'}`}>
+                <span className="font-medium text-[#111] whitespace-nowrap">{r.region}</span>
                 <span className="text-[#666] text-xs">{r.email}</span>
               </div>
             ))}
@@ -134,12 +138,12 @@ export default async function HomePage() {
           <table className="hidden sm:table w-full text-sm">
             <thead>
               <tr className="bg-[#111] text-white">
-                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
-                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
-                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
-                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
-                <th className="px-4 py-2 text-left font-medium border-b-0">지역</th>
-                <th className="px-4 py-2 text-left font-medium border-b-0">담당자 이메일</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">담당자 이메일</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">담당자 이메일</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">지역</th>
+                <th className="px-4 py-2 text-left font-medium border-b-0 whitespace-nowrap">담당자 이메일</th>
               </tr>
             </thead>
             <tbody>
@@ -147,7 +151,7 @@ export default async function HomePage() {
                 <tr key={i} className={i % 2 === 1 ? 'bg-[#f7f7f7]' : 'bg-white'}>
                   {[0, 1, 2].map(j => (
                     <>
-                      <td key={`${i}-r${j}`} className="px-4 py-2 font-medium text-[#111]">{row[j]?.region || ''}</td>
+                      <td key={`${i}-r${j}`} className="px-4 py-2 font-medium text-[#111] whitespace-nowrap">{row[j]?.region || ''}</td>
                       <td key={`${i}-e${j}`} className="px-4 py-2 text-[#666]">{row[j]?.email || ''}</td>
                     </>
                   ))}
