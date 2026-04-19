@@ -64,10 +64,15 @@ export default function StatsPage() {
       let regions: { region: string }[];
 
       if (isSupabaseConfigured) {
-        const { data } = await supabase.from('registrations').select('region');
+        const { data } = await supabase
+          .from('registrations')
+          .select('region')
+          .neq('payment_status', 'deleted');
         regions = data || [];
       } else {
-        regions = getMockRegistrations().map(r => ({ region: r.region }));
+        regions = getMockRegistrations()
+          .filter(r => r.payment_status !== 'deleted')
+          .map(r => ({ region: r.region }));
       }
 
       setTotal(regions.length);
