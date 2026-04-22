@@ -111,14 +111,7 @@ CREATE POLICY "Anyone can view edit_logs"
 CREATE POLICY "Anyone can insert edit_logs"
   ON edit_logs FOR INSERT WITH CHECK (true);
 
--- 7. Storage 정책 (photos 버킷)
-CREATE POLICY "Allow public uploads"
-  ON storage.objects FOR INSERT
-  WITH CHECK (bucket_id = 'photos');
-
-CREATE POLICY "Allow public reads"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'photos');
+-- 7. Storage: 사진은 Cloudinary로 이관됨 (Supabase storage 미사용)
 
 -- 8. 페이지 콘텐츠 테이블
 CREATE TABLE page_content (

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 import { resizeImage } from '@/lib/resizeImage';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchPageContent } from '@/lib/pageContent';
 import Link from 'next/link';
 
@@ -291,16 +292,8 @@ export default function GroupRegisterPage() {
       const photoUrls = await Promise.all(
         participants.map(async (p) => {
           if (!p.photoFile) return null;
-          const ext = p.photoFile.name.split('.').pop();
-          const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from('photos')
-            .upload(fileName, p.photoFile, {
-              contentType: p.photoFile.type,
-            });
-          if (uploadError) throw uploadError;
-          const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
-          return urlData.publicUrl;
+          const result = await uploadToCloudinary(p.photoFile, { folder: 'unigeo/registrations' });
+          return result.secureUrl;
         })
       );
 
