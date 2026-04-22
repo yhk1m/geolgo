@@ -813,6 +813,16 @@ export default function PaymentsPage() {
             </button>
           </div>
         )}
+        {isTrashTab && selected.size === 0 && trashed.length > 0 && (
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <button
+              onClick={() => requestDelete(trashed.map(r => r.id), 'permanent')}
+              className="text-xs sm:text-sm px-4 py-1.5 text-white bg-[#c00] hover:bg-[#a00] rounded-md"
+            >
+              휴지통 비우기 ({trashed.length}건)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 전체 선택 안내 배너 */}

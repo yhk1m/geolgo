@@ -73,6 +73,15 @@ CREATE POLICY "Service role can update registrations"
   USING (true)
   WITH CHECK (true);
 
+-- 관리자 삭제 (영구삭제용)
+CREATE POLICY "Anyone can delete registrations"
+  ON registrations FOR DELETE
+  USING (true);
+
+CREATE POLICY "Anyone can delete groups"
+  ON groups FOR DELETE
+  USING (true);
+
 -- 5. 시험장소 테이블
 CREATE TABLE exam_locations (
   region TEXT PRIMARY KEY,
@@ -110,6 +119,9 @@ CREATE POLICY "Anyone can view edit_logs"
 
 CREATE POLICY "Anyone can insert edit_logs"
   ON edit_logs FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete edit_logs"
+  ON edit_logs FOR DELETE USING (true);
 
 -- 7. Storage: 사진은 Cloudinary로 이관됨 (Supabase storage 미사용)
 
