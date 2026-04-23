@@ -5,7 +5,7 @@
 **Unigeo**는 제26회 전국지리올림피아드의 참가 신청 및 관리를 위한 웹 애플리케이션입니다.
 학생 개인 또는 학교 단체로 참가 신청을 할 수 있으며, 관리자는 입금 확인 및 참가자 관리를 수행할 수 있습니다.
 
-- **배포 URL:** https://geolgo.vercel.app
+- **배포 URL:** https://geoolympiad.kr (https://geolgo.vercel.app)
 - **GitHub:** https://github.com/yhk1m/geolgo
 - **참가비:** 20,000원 (1인)
 - **접수 기간:** 2026. 4. 27 ~ 5. 16
