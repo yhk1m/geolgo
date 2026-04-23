@@ -9,6 +9,7 @@ import { computeExamNumbers } from '@/lib/examNumber';
 import { downloadExamTicketPDF } from '@/lib/examTicket';
 import type { ExamLocationInfo } from '@/lib/examTicket';
 import { resizeImage } from '@/lib/resizeImage';
+import PhotoEditor from '@/components/PhotoEditor';
 import { downloadPhotoRosterPDF } from '@/lib/photoRoster';
 import type { RosterEntry } from '@/lib/photoRoster';
 import * as XLSX from 'xlsx';
@@ -109,6 +110,7 @@ export default function PaymentsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
+  const [editingPhotoSource, setEditingPhotoSource] = useState<File | null>(null);
 
   useEffect(() => {
     loadData();
@@ -564,11 +566,17 @@ export default function PaymentsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { alert('이미지 파일만 업로드 가능합니다.'); return; }
-    if (file.size > 5 * 1024 * 1024) { alert('파일 크기는 5MB 이하여야 합니다.'); return; }
-    setEditPhotoFile(file);
+    if (file.size > 10 * 1024 * 1024) { alert('파일 크기는 10MB 이하여야 합니다.'); return; }
+    setEditingPhotoSource(file);
+    e.target.value = '';
+  }
+
+  function applyEditedAdminPhoto(edited: File) {
+    setEditPhotoFile(edited);
     const reader = new FileReader();
     reader.onload = (ev) => setEditPhotoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(edited);
+    setEditingPhotoSource(null);
   }
 
   async function handleSaveEdit() {
@@ -1417,6 +1425,14 @@ export default function PaymentsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {editingPhotoSource && (
+        <PhotoEditor
+          file={editingPhotoSource}
+          onCancel={() => setEditingPhotoSource(null)}
+          onApply={applyEditedAdminPhoto}
+        />
       )}
     </div>
   );

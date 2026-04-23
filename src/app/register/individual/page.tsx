@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
-import { resizeImage } from '@/lib/resizeImage';
 import { fetchPageContent } from '@/lib/pageContent';
+import PhotoEditor from '@/components/PhotoEditor';
 import Link from 'next/link';
 
 export default function IndividualRegisterPage() {
@@ -48,6 +48,7 @@ export default function IndividualRegisterPage() {
   const [birthDay, setBirthDay] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [editingPhoto, setEditingPhoto] = useState<File | null>(null);
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -87,7 +88,7 @@ export default function IndividualRegisterPage() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -95,16 +96,21 @@ export default function IndividualRegisterPage() {
       alert('이미지 파일만 업로드 가능합니다.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('파일 크기는 5MB 이하여야 합니다.');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('파일 크기는 10MB 이하여야 합니다.');
       return;
     }
 
-    const resized = await resizeImage(file);
-    setPhotoFile(resized);
+    setEditingPhoto(file);
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
+
+  const applyEditedPhoto = (edited: File) => {
+    setPhotoFile(edited);
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
-    reader.readAsDataURL(resized);
+    reader.readAsDataURL(edited);
+    setEditingPhoto(null);
   };
 
   const removePhoto = () => {
@@ -477,6 +483,14 @@ export default function IndividualRegisterPage() {
           신청 후 참가비 20,000원을 입금하셔야 접수가 완료됩니다.
         </p>
       </form>
+
+      {editingPhoto && (
+        <PhotoEditor
+          file={editingPhoto}
+          onCancel={() => setEditingPhoto(null)}
+          onApply={applyEditedPhoto}
+        />
+      )}
     </div>
   );
 }

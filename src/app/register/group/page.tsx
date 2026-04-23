@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 import { resizeImage } from '@/lib/resizeImage';
 import { fetchPageContent } from '@/lib/pageContent';
+import PhotoEditor from '@/components/PhotoEditor';
 import Link from 'next/link';
 
 interface Participant {
@@ -117,6 +118,7 @@ export default function GroupRegisterPage() {
   const [csvError, setCsvError] = useState('');
   const [photoConflicts, setPhotoConflicts] = useState<PhotoConflict[]>([]);
   const [showPhotoConflictModal, setShowPhotoConflictModal] = useState(false);
+  const [editingParticipantPhoto, setEditingParticipantPhoto] = useState<{ index: number; file: File } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkPhotoRef = useRef<HTMLInputElement>(null);
 
@@ -164,29 +166,35 @@ export default function GroupRegisterPage() {
     );
   };
 
-  const updateParticipantPhoto = async (index: number, file: File | null) => {
+  const updateParticipantPhoto = (index: number, file: File | null) => {
     if (file) {
       if (!file.type.startsWith('image/')) {
         alert('이미지 파일만 업로드 가능합니다.');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('파일 크기는 5MB 이하여야 합니다.');
+      if (file.size > 10 * 1024 * 1024) {
+        alert('파일 크기는 10MB 이하여야 합니다.');
         return;
       }
-      const resized = await resizeImage(file);
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setParticipants(prev =>
-          prev.map((p, i) => i === index ? { ...p, photoFile: resized, photoPreview: ev.target?.result as string } : p)
-        );
-      };
-      reader.readAsDataURL(resized);
+      setEditingParticipantPhoto({ index, file });
     } else {
       setParticipants(prev =>
         prev.map((p, i) => i === index ? { ...p, photoFile: null, photoPreview: null } : p)
       );
     }
+  };
+
+  const applyParticipantPhoto = (edited: File) => {
+    if (!editingParticipantPhoto) return;
+    const { index } = editingParticipantPhoto;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setParticipants(prev =>
+        prev.map((p, i) => i === index ? { ...p, photoFile: edited, photoPreview: ev.target?.result as string } : p)
+      );
+    };
+    reader.readAsDataURL(edited);
+    setEditingParticipantPhoto(null);
   };
 
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -796,6 +804,14 @@ export default function GroupRegisterPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {editingParticipantPhoto && (
+        <PhotoEditor
+          file={editingParticipantPhoto.file}
+          onCancel={() => setEditingParticipantPhoto(null)}
+          onApply={applyParticipantPhoto}
+        />
       )}
     </div>
   );
