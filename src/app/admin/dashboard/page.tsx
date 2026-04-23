@@ -17,9 +17,12 @@ interface Stats {
   recent: { name: string; school: string; created_at: string; payment_status: string }[];
 }
 
+const RECENT_PAGE_SIZE = 15;
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recentPage, setRecentPage] = useState(1);
 
   useEffect(() => {
     loadStats();
@@ -66,9 +69,7 @@ export default function AdminDashboard() {
         .sort((a, b) => b.count - a.count);
 
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-      const recent = all
-        .filter(r => new Date(r.created_at).getTime() >= oneDayAgo)
-        .slice(0, 15);
+      const recent = all.filter(r => new Date(r.created_at).getTime() >= oneDayAgo);
 
       setStats({
         total: all.length,
@@ -164,32 +165,67 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="p-5 rounded-lg border border-[#e5e5e5] bg-white">
-          <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4">
-            최근 신청 (24시간 이내 {stats.recent.length}명)
-          </h2>
-          <div>
-            {stats.recent.map((r, i) => (
-              <div key={i} className={`flex items-center justify-between text-sm px-3 py-[7px] rounded ${i % 2 === 1 ? 'bg-[#f7f7f7]' : ''}`}>
-                <div className="min-w-0 flex-1">
-                  <span className="text-[#111] font-medium">{r.name}</span>
-                  <span className="text-[#999] ml-2 text-xs sm:text-sm">{r.school}</span>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-6 shrink-0 ml-2">
-                  <span className="text-[#999] text-xs hidden sm:inline">{new Date(r.created_at).toLocaleDateString('ko-KR')}</span>
-                  <span className={`badge ${
-                    r.payment_status === 'confirmed' ? 'badge-confirmed' : 'badge-pending'
-                  }`}>
-                    {r.payment_status === 'confirmed' ? '확인' : '대기'}
-                  </span>
-                </div>
+        {(() => {
+          const totalRecent = stats.recent.length;
+          const totalPages = Math.max(1, Math.ceil(totalRecent / RECENT_PAGE_SIZE));
+          const safePage = Math.min(recentPage, totalPages);
+          const startIdx = (safePage - 1) * RECENT_PAGE_SIZE;
+          const pageItems = stats.recent.slice(startIdx, startIdx + RECENT_PAGE_SIZE);
+          return (
+            <div className="p-5 rounded-lg border border-[#e5e5e5] bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider">
+                  최근 신청 (24시간 이내 {totalRecent}명)
+                </h2>
+                {totalRecent > RECENT_PAGE_SIZE && (
+                  <span className="text-xs text-[#999]">{safePage} / {totalPages}</span>
+                )}
               </div>
-            ))}
-            {stats.recent.length === 0 && (
-              <p className="text-[#999] text-sm text-center py-4">신청 내역이 없습니다.</p>
-            )}
-          </div>
-        </div>
+              <div>
+                {pageItems.map((r, i) => (
+                  <div key={startIdx + i} className={`flex items-center justify-between text-sm px-3 py-[7px] rounded ${i % 2 === 1 ? 'bg-[#f7f7f7]' : ''}`}>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[#111] font-medium">{r.name}</span>
+                      <span className="text-[#999] ml-2 text-xs sm:text-sm">{r.school}</span>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-6 shrink-0 ml-2">
+                      <span className="text-[#999] text-xs hidden sm:inline">{new Date(r.created_at).toLocaleDateString('ko-KR')}</span>
+                      <span className={`badge ${
+                        r.payment_status === 'confirmed' ? 'badge-confirmed' : 'badge-pending'
+                      }`}>
+                        {r.payment_status === 'confirmed' ? '확인' : '대기'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {totalRecent === 0 && (
+                  <p className="text-[#999] text-sm text-center py-4">신청 내역이 없습니다.</p>
+                )}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-[#f0f0f0]">
+                  <button
+                    type="button"
+                    onClick={() => setRecentPage(Math.max(1, safePage - 1))}
+                    disabled={safePage === 1}
+                    className="px-3 py-1 text-xs rounded border border-[#e5e5e5] text-[#666] hover:bg-[#fafafa] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    이전
+                  </button>
+                  <span className="text-xs text-[#666] tabular-nums">{safePage} / {totalPages}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRecentPage(Math.min(totalPages, safePage + 1))}
+                    disabled={safePage === totalPages}
+                    className="px-3 py-1 text-xs rounded border border-[#e5e5e5] text-[#666] hover:bg-[#fafafa] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    다음
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
