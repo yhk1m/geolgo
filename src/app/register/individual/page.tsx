@@ -387,7 +387,7 @@ export default function IndividualRegisterPage() {
                   className="hidden"
                 />
               </label>
-              <p className="text-xs text-[#999] mt-1">이미지 파일, 10MB 이하 (편집 후 자동 압축)</p>
+              <p className="text-xs text-[#999] mt-1">이미지 파일, 5MB 이하 권장 (편집 후 자동 압축)</p>
             </div>
             {photoPreview && (
               <div className="relative">
