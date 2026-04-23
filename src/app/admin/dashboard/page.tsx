@@ -161,7 +161,7 @@ export default function AdminDashboard() {
 
         <div className="p-5 rounded-lg border border-[#e5e5e5] bg-white">
           <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4">
-            최근 신청 (최근 15명)
+            최근 신청 (최근 {stats.recent.length}명)
           </h2>
           <div>
             {stats.recent.map((r, i) => (
