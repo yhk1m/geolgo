@@ -65,6 +65,11 @@ export default function AdminDashboard() {
         .map(([region, count]) => ({ region, count }))
         .sort((a, b) => b.count - a.count);
 
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const recent = all
+        .filter(r => new Date(r.created_at).getTime() >= oneDayAgo)
+        .slice(0, 15);
+
       setStats({
         total: all.length,
         confirmed: confirmed.length,
@@ -74,7 +79,7 @@ export default function AdminDashboard() {
         totalAmount: all.reduce((sum, r) => sum + (r.payment_amount || 0), 0),
         confirmedAmount: confirmed.reduce((sum, r) => sum + (r.payment_amount || 0), 0),
         byRegion,
-        recent: all.slice(0, 15),
+        recent,
       });
     } catch (err) {
       console.error('Failed to load stats:', err);
@@ -161,7 +166,7 @@ export default function AdminDashboard() {
 
         <div className="p-5 rounded-lg border border-[#e5e5e5] bg-white">
           <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4">
-            최근 신청 (최근 {stats.recent.length}명)
+            최근 신청 (24시간 이내 {stats.recent.length}명)
           </h2>
           <div>
             {stats.recent.map((r, i) => (
