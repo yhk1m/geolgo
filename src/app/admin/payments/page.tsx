@@ -9,7 +9,6 @@ import { computeExamNumbers } from '@/lib/examNumber';
 import { downloadExamTicketPDF } from '@/lib/examTicket';
 import type { ExamLocationInfo } from '@/lib/examTicket';
 import { resizeImage } from '@/lib/resizeImage';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 import { downloadPhotoRosterPDF } from '@/lib/photoRoster';
 import type { RosterEntry } from '@/lib/photoRoster';
 import * as XLSX from 'xlsx';
@@ -601,8 +600,12 @@ export default function PaymentsPage() {
       // 사진 변경 처리
       if (editPhotoFile && isSupabaseConfigured) {
         const resized = await resizeImage(editPhotoFile);
-        const result = await uploadToCloudinary(resized, { folder: 'unigeo/registrations' });
-        updates.photo_url = result.secureUrl;
+        const ext = resized.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('photos').upload(fileName, resized);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+        updates.photo_url = urlData.publicUrl;
         changes['사진'] = { old: editTarget.photo_url ? '(기존 사진)' : '(없음)', new: '(새 사진)' };
       }
 

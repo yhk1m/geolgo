@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { REGIONS } from '@/lib/regions';
 import { resizeImage } from '@/lib/resizeImage';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchPageContent } from '@/lib/pageContent';
 import Link from 'next/link';
 
@@ -127,8 +126,15 @@ export default function IndividualRegisterPage() {
       let photo_url: string | null = null;
 
       if (photoFile) {
-        const result = await uploadToCloudinary(photoFile, { folder: 'unigeo/registrations' });
-        photo_url = result.secureUrl;
+        const ext = photoFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(fileName, photoFile);
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+        photo_url = urlData.publicUrl;
       }
 
       const { error } = await supabase.from('registrations').insert({

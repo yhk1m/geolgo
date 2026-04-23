@@ -1,6 +1,6 @@
 const MAX_WIDTH = 400;
 const MAX_HEIGHT = 500;
-const JPEG_QUALITY = 0.85;
+const JPEG_QUALITY = 0.75;
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

@@ -2,8 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { isSupabaseConfigured } from '@/lib/supabase';
-import { uploadToCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { PageContent, DEFAULT_CONTENT, fetchPageContent, savePageContent } from '@/lib/pageContent';
 
 export default function AdminContentPage() {
@@ -204,19 +203,22 @@ export default function AdminContentPage() {
               onChange={async e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (!isCloudinaryConfigured) {
-                  alert('Cloudinary가 설정되지 않아 업로드할 수 없습니다.');
+                if (!isSupabaseConfigured) {
+                  alert('Supabase가 설정되지 않아 업로드할 수 없습니다.');
                   return;
                 }
                 setUploading(true);
-                try {
-                  const result = await uploadToCloudinary(file, { folder: 'unigeo/announcement' });
-                  setContent(prev => ({ ...prev, announcementImageUrl: result.secureUrl }));
-                } catch (err) {
-                  alert('업로드 실패: ' + (err instanceof Error ? err.message : String(err)));
-                } finally {
+                const ext = file.name.split('.').pop() || 'png';
+                const path = `announcement/announcement_${Date.now()}.${ext}`;
+                const { error } = await supabase.storage.from('photos').upload(path, file, { upsert: true });
+                if (error) {
+                  alert('업로드 실패: ' + error.message);
                   setUploading(false);
+                  return;
                 }
+                const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
+                setContent(prev => ({ ...prev, announcementImageUrl: urlData.publicUrl }));
+                setUploading(false);
               }}
             />
           </label>
@@ -251,19 +253,21 @@ export default function AdminContentPage() {
               onChange={async e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (!isCloudinaryConfigured) {
-                  alert('Cloudinary가 설정되지 않아 업로드할 수 없습니다.');
+                if (!isSupabaseConfigured) {
+                  alert('Supabase가 설정되지 않아 업로드할 수 없습니다.');
                   return;
                 }
                 setUploading(true);
-                try {
-                  const result = await uploadToCloudinary(file, { folder: 'unigeo/guides', resourceType: 'raw' });
-                  setContent(prev => ({ ...prev, groupGuideUrl: result.secureUrl }));
-                } catch (err) {
-                  alert('업로드 실패: ' + (err instanceof Error ? err.message : String(err)));
-                } finally {
+                const path = `guides/group_guide_${Date.now()}.pdf`;
+                const { error } = await supabase.storage.from('photos').upload(path, file, { upsert: true });
+                if (error) {
+                  alert('업로드 실패: ' + error.message);
                   setUploading(false);
+                  return;
                 }
+                const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
+                setContent(prev => ({ ...prev, groupGuideUrl: urlData.publicUrl }));
+                setUploading(false);
               }}
             />
           </label>
