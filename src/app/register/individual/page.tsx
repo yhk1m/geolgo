@@ -387,15 +387,22 @@ export default function IndividualRegisterPage() {
                   className="hidden"
                 />
               </label>
-              <p className="text-xs text-[#999] mt-1">이미지 파일, 5MB 이하</p>
+              <p className="text-xs text-[#999] mt-1">이미지 파일, 10MB 이하 (편집 후 자동 압축)</p>
             </div>
             {photoPreview && (
               <div className="relative">
-                <img
-                  src={photoPreview}
-                  alt="미리보기"
-                  className="w-[70px] h-[90px] object-cover rounded border border-[#ddd]"
-                />
+                <button
+                  type="button"
+                  onClick={() => photoFile && setEditingPhoto(photoFile)}
+                  className="block p-0 cursor-pointer"
+                  title="사진 편집"
+                >
+                  <img
+                    src={photoPreview}
+                    alt="미리보기"
+                    className="w-[70px] h-[90px] object-cover rounded border border-[#ddd]"
+                  />
+                </button>
                 <button
                   type="button"
                   onClick={removePhoto}

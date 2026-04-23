@@ -119,6 +119,7 @@ export default function GroupRegisterPage() {
   const [photoConflicts, setPhotoConflicts] = useState<PhotoConflict[]>([]);
   const [showPhotoConflictModal, setShowPhotoConflictModal] = useState(false);
   const [editingParticipantPhoto, setEditingParticipantPhoto] = useState<{ index: number; file: File } | null>(null);
+  const [bulkSummary, setBulkSummary] = useState<{ total: number; matched: number; conflict: number; oversize: number; nomatch: number; nonImage: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkPhotoRef = useRef<HTMLInputElement>(null);
 
@@ -226,12 +227,14 @@ export default function GroupRegisterPage() {
 
     const conflicts: PhotoConflict[] = [];
     const newParticipants = [...participants];
+    let matched = 0, oversize = 0, nomatch = 0, nonImage = 0;
+    const total = files.length;
 
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
-      if (file.size > 5 * 1024 * 1024) continue;
+      if (!file.type.startsWith('image/')) { nonImage++; continue; }
+      if (file.size > 10 * 1024 * 1024) { oversize++; continue; }
 
-      const resized = await resizeImage(file);
+      const resized = await resizeImage(file, { centerCrop: true });
       const name = file.name.replace(/\.[^.]+$/, '').trim();
       const matchingIndices = newParticipants
         .map((p, i) => p.name.trim() === name ? i : -1)
@@ -244,9 +247,12 @@ export default function GroupRegisterPage() {
           photoFile: resized,
           photoPreview: preview,
         };
+        matched++;
       } else if (matchingIndices.length > 1) {
         const preview = await readFileAsDataURL(resized);
         conflicts.push({ file: resized, preview, name, matchingIndices });
+      } else {
+        nomatch++;
       }
     }
 
@@ -256,6 +262,8 @@ export default function GroupRegisterPage() {
       setPhotoConflicts(conflicts);
       setShowPhotoConflictModal(true);
     }
+
+    setBulkSummary({ total, matched, conflict: conflicts.length, oversize, nomatch, nonImage });
 
     if (bulkPhotoRef.current) bulkPhotoRef.current.value = '';
   };
@@ -584,6 +592,29 @@ export default function GroupRegisterPage() {
               <p>홍길동,1,3,010-1234-5678,2008-03-15,hong@email.com</p>
               <p>김철수,2,가,010-9876-5432,2007-11-20,kim@email.com</p>
             </div>
+            {bulkSummary && (
+              <div className="mt-3 p-3 rounded border border-[#ddd] bg-white text-xs flex items-start justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-[#111] font-medium">사진 일괄 업로드 결과: {bulkSummary.total}장 중 {bulkSummary.matched}장 적용</p>
+                  {(bulkSummary.conflict + bulkSummary.oversize + bulkSummary.nomatch + bulkSummary.nonImage) > 0 && (
+                    <ul className="text-[#666] space-y-0.5">
+                      {bulkSummary.conflict > 0 && <li>· 동명이인 매칭 대기: {bulkSummary.conflict}장</li>}
+                      {bulkSummary.oversize > 0 && <li className="text-[#c00]">· 용량 초과(10MB 초과)로 누락: {bulkSummary.oversize}장</li>}
+                      {bulkSummary.nomatch > 0 && <li className="text-[#c00]">· 이름 불일치로 누락: {bulkSummary.nomatch}장 (파일명이 학생 이름과 정확히 같아야 함)</li>}
+                      {bulkSummary.nonImage > 0 && <li className="text-[#c00]">· 이미지 아님: {bulkSummary.nonImage}장</li>}
+                    </ul>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBulkSummary(null)}
+                  className="text-[#999] hover:text-[#111] shrink-0"
+                  aria-label="닫기"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -703,7 +734,14 @@ export default function GroupRegisterPage() {
                   <div className="relative">
                     {p.photoPreview ? (
                       <div className="relative w-[35px] h-[45px] rounded border border-[#ddd] overflow-hidden">
-                        <img src={p.photoPreview} alt="사진" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => p.photoFile && setEditingParticipantPhoto({ index: i, file: p.photoFile })}
+                          className="block w-full h-full p-0 cursor-pointer"
+                          title="사진 편집"
+                        >
+                          <img src={p.photoPreview} alt="사진" className="w-full h-full object-cover" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => updateParticipantPhoto(i, null)}

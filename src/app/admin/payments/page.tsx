@@ -1251,7 +1251,18 @@ export default function PaymentsPage() {
                 <div className="flex items-center gap-3">
                   {editPhotoPreview ? (
                     <div className="relative w-[45px] h-[60px] rounded border border-[#ddd] overflow-hidden shrink-0">
-                      <img src={editPhotoPreview} alt="사진" className="w-full h-full object-cover" />
+                      {editPhotoFile ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingPhotoSource(editPhotoFile)}
+                          className="block w-full h-full p-0 cursor-pointer"
+                          title="사진 편집"
+                        >
+                          <img src={editPhotoPreview} alt="사진" className="w-full h-full object-cover" />
+                        </button>
+                      ) : (
+                        <img src={editPhotoPreview} alt="사진" className="w-full h-full object-cover" />
+                      )}
                       <button
                         type="button"
                         onClick={() => { setEditPhotoFile(null); setEditPhotoPreview(null); }}
