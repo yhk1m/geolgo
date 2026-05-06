@@ -115,6 +115,7 @@ export default function GroupRegisterPage() {
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [duplicateAlert, setDuplicateAlert] = useState<{ name: string; reason: string }[] | null>(null);
   const [csvError, setCsvError] = useState('');
   const [photoConflicts, setPhotoConflicts] = useState<PhotoConflict[]>([]);
   const [showPhotoConflictModal, setShowPhotoConflictModal] = useState(false);
@@ -302,6 +303,56 @@ export default function GroupRegisterPage() {
     setSubmitting(true);
     setResult(null);
 
+    // 중복 신청 검사
+    const normalizePhone = (p: string) => p.replace(/[^0-9]/g, '');
+    const dupList: { name: string; reason: string }[] = [];
+
+    // 1) 입력 내 자체 중복 검사 (이름 + 생년월일 + 전화번호)
+    const seen = new Map<string, number>();
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+      if (!p.name || !p.birthdate || !p.phone) continue;
+      const key = `${p.name}|${p.birthdate}|${normalizePhone(p.phone)}`;
+      if (seen.has(key)) {
+        dupList.push({ name: p.name, reason: `입력 목록 ${seen.get(key)! + 1}번과 ${i + 1}번이 동일 정보입니다.` });
+      } else {
+        seen.set(key, i);
+      }
+    }
+
+    // 2) DB 내 기존 신청과 중복 검사
+    if (dupList.length === 0) {
+      const names = Array.from(new Set(participants.map(p => p.name).filter(Boolean)));
+      if (names.length > 0) {
+        const { data: existing } = await supabase
+          .from('registrations')
+          .select('id, name, birthdate, phone, school')
+          .in('name', names)
+          .neq('payment_status', 'deleted');
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          if (!p.birthdate) continue;
+          const dup = (existing || []).find(r =>
+            r.name === p.name &&
+            r.birthdate === p.birthdate &&
+            normalizePhone(r.phone) === normalizePhone(p.phone)
+          );
+          if (dup) {
+            dupList.push({
+              name: p.name,
+              reason: `이미 신청 내역이 존재합니다${dup.school ? ` (${dup.school})` : ''}.`,
+            });
+          }
+        }
+      }
+    }
+
+    if (dupList.length > 0) {
+      setDuplicateAlert(dupList);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       // Upload all participant photos in parallel
       const photoUrls = await Promise.all(
@@ -404,6 +455,38 @@ export default function GroupRegisterPage() {
         )}
       </div>
       <p className="text-[#666] mb-10">지도교사가 학생들을 일괄 신청합니다.</p>
+
+      {duplicateAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setDuplicateAlert(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-[#fff7e0] rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl text-[#c80]">!</span>
+              </div>
+              <h3 className="text-lg font-semibold text-[#c80]">중복 신청 감지</h3>
+            </div>
+            <p className="text-sm text-[#333] mb-3 text-center">
+              아래 학생들은 이미 신청 내역이 있거나 입력이 중복됩니다.<br />
+              해당 학생을 제외한 후 다시 시도해주세요.
+            </p>
+            <ul className="mb-4 space-y-2 text-sm">
+              {duplicateAlert.map((d, i) => (
+                <li key={i} className="p-3 rounded border border-[#eee] bg-[#fafafa]">
+                  <span className="font-semibold text-[#111]">{d.name}</span>
+                  <span className="block text-xs text-[#666] mt-0.5">{d.reason}</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setDuplicateAlert(null)}
+              className="btn btn-secondary w-full py-2.5"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => !result.success && setResult(null)}>

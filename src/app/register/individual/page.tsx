@@ -52,6 +52,7 @@ export default function IndividualRegisterPage() {
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [duplicateAlert, setDuplicateAlert] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const isDirty = Object.values(form).some(v => v !== '') || birthYear !== '' || birthMonth !== '' || birthDay !== '' || photoFile !== null || privacyConsent;
@@ -128,6 +129,29 @@ export default function IndividualRegisterPage() {
     setSubmitting(true);
     setResult(null);
 
+    const birthdateStr = birthYear && birthMonth && birthDay
+      ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`
+      : null;
+
+    // 중복 신청 검사: 이름 + 생년월일 + 전화번호가 동일한 활성 신청이 있으면 차단
+    if (birthdateStr) {
+      const normalizePhone = (p: string) => p.replace(/[^0-9]/g, '');
+      const { data: existing } = await supabase
+        .from('registrations')
+        .select('id, phone, school')
+        .eq('name', form.name)
+        .eq('birthdate', birthdateStr)
+        .neq('payment_status', 'deleted');
+      const dup = (existing || []).find(r => normalizePhone(r.phone) === normalizePhone(form.phone));
+      if (dup) {
+        setDuplicateAlert(
+          `${form.name}님은 이미 신청 내역이 있습니다.\n(이름·생년월일·전화번호가 동일한 접수 확인)\n\n중복 신청을 방지하기 위해 접수가 차단되었습니다. 신청 내역 확인은 '접수 확인' 메뉴에서 가능합니다.`
+        );
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       let photo_url: string | null = null;
 
@@ -151,7 +175,7 @@ export default function IndividualRegisterPage() {
         phone: form.phone,
         email: form.email || null,
         region: form.region,
-        birthdate: birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null,
+        birthdate: birthdateStr,
         photo_url,
         registration_type: 'individual',
         payment_status: 'pending',
@@ -201,6 +225,27 @@ export default function IndividualRegisterPage() {
     <div className="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <h1 className="text-3xl font-bold mb-2 text-[#111]">개인 참가 신청</h1>
       <p className="text-[#666] mb-10">제26회 전국지리올림피아드 개인 접수</p>
+
+      {duplicateAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setDuplicateAlert(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-[#fff7e0] rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl text-[#c80]">!</span>
+              </div>
+              <h3 className="text-lg font-semibold text-[#c80]">중복 신청</h3>
+            </div>
+            <p className="text-sm text-[#333] mb-4 text-center whitespace-pre-line">{duplicateAlert}</p>
+            <button
+              type="button"
+              onClick={() => setDuplicateAlert(null)}
+              className="btn btn-secondary w-full py-2.5"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => !result.success && setResult(null)}>
