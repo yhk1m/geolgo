@@ -1,31 +1,63 @@
+// © 2026 김용현
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
-const adminNav = [
+type Role = 'full' | 'viewer';
+
+const FULL_NAV = [
   { href: '/admin/dashboard', label: '대시보드' },
+  { href: '/admin/regions', label: '지역별 대시보드' },
   { href: '/admin/payments', label: '참가자 관리' },
   { href: '/admin/content', label: '대회 안내 관리' },
 ];
 
+const VIEWER_NAV = [
+  { href: '/admin/dashboard', label: '대시보드' },
+  { href: '/admin/regions', label: '지역별 대시보드' },
+];
+
+const VIEWER_ALLOWED_PREFIXES = ['/admin/dashboard', '/admin/regions'];
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [authenticated, setAuthenticated] = useState(false);
+  const [role, setRole] = useState<Role>('full');
   const [password, setPassword] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('admin_auth');
-    if (saved === 'true') setAuthenticated(true);
+    const savedRole = sessionStorage.getItem('admin_role') as Role | null;
+    if (saved === 'true') {
+      setAuthenticated(true);
+      setRole(savedRole === 'viewer' ? 'viewer' : 'full');
+    }
   }, []);
+
+  // viewer 권한일 때 허용되지 않은 경로 접근 시 대시보드로 리다이렉트
+  useEffect(() => {
+    if (!authenticated) return;
+    if (role !== 'viewer') return;
+    const allowed = VIEWER_ALLOWED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+    if (!allowed) router.replace('/admin/dashboard');
+  }, [authenticated, role, pathname, router]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === 'admin0220') {
       setAuthenticated(true);
+      setRole('full');
       sessionStorage.setItem('admin_auth', 'true');
+      sessionStorage.setItem('admin_role', 'full');
+    } else if (password === 'geopia2026') {
+      setAuthenticated(true);
+      setRole('viewer');
+      sessionStorage.setItem('admin_auth', 'true');
+      sessionStorage.setItem('admin_role', 'viewer');
     } else {
       alert('비밀번호가 올바르지 않습니다.');
     }
@@ -51,6 +83,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  const adminNav = role === 'viewer' ? VIEWER_NAV : FULL_NAV;
+  const isActiveTab = (href: string) =>
+    pathname === href || pathname.startsWith(href + '/');
+
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col">
       <header className="bg-[#111] text-white sticky top-0 z-50">
@@ -59,7 +95,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/admin/dashboard" className="flex items-center gap-1.5 tracking-tight">
               <img src="/favicon.svg" alt="" className="w-6 h-6 invert" />
               <span className="font-bold">Unigeo</span>
-              <span className="text-[13px] font-normal text-[#888]">관리자</span>
+              <span className="text-[13px] font-normal text-[#888]">
+                {role === 'viewer' ? '조회' : '관리자'}
+              </span>
             </Link>
             <nav className="hidden sm:flex items-center gap-1">
               {adminNav.map(item => (
@@ -67,7 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   key={item.href}
                   href={item.href}
                   className={`px-3 py-1.5 rounded text-sm transition-colors ${
-                    pathname === item.href
+                    isActiveTab(item.href)
                       ? 'bg-white/20 text-white'
                       : 'text-[#999] hover:text-white'
                   }`}
@@ -84,7 +122,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <button
               onClick={() => {
                 sessionStorage.removeItem('admin_auth');
+                sessionStorage.removeItem('admin_role');
                 setAuthenticated(false);
+                setRole('full');
               }}
               className="text-xs text-[#666] hover:text-white"
             >
@@ -113,7 +153,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 onClick={() => setMenuOpen(false)}
                 className={`block px-3 py-2 rounded text-sm transition-colors ${
-                  pathname === item.href
+                  isActiveTab(item.href)
                     ? 'bg-white/20 text-white'
                     : 'text-[#999] hover:text-white'
                 }`}
@@ -131,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         )}
       </header>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 flex-1">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 flex-1 w-full">
         {children}
       </div>
     </div>

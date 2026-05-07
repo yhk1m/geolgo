@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getMockRegistrations } from '@/lib/mockdata';
 import { regionNameMap } from '@/lib/regions';
@@ -149,8 +150,12 @@ export default function AdminDashboard() {
           </h2>
           <div>
             {stats.byRegion.map((r, i) => (
-              <div key={i} className={`flex items-center justify-between text-sm px-3 py-1.5 rounded ${i % 2 === 1 ? 'bg-[#f7f7f7]' : ''}`}>
-                <span className="text-[#111]">{regionNameMap[r.region] || r.region}</span>
+              <Link
+                key={i}
+                href={`/admin/regions/${r.region}`}
+                className={`group flex items-center justify-between text-sm px-3 py-1.5 rounded transition-colors ${i % 2 === 1 ? 'bg-[#f7f7f7]' : ''} hover:bg-[#eef]`}
+              >
+                <span className="text-[#111] group-hover:underline">{regionNameMap[r.region] || r.region}</span>
                 <div className="flex items-center gap-3">
                   <div className="w-24 h-2 bg-[#f0f0f0] rounded-full overflow-hidden">
                     <div
@@ -160,7 +165,7 @@ export default function AdminDashboard() {
                   </div>
                   <span className="text-[#666] w-8 text-right">{r.count}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
