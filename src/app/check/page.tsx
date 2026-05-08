@@ -73,14 +73,15 @@ export default function CheckPage() {
           .select('*')
           .eq('name', name)
           .eq('birthdate', birthdate)
-          .neq('payment_status', 'deleted');
+          .neq('payment_status', 'deleted')
+          .neq('payment_status', 'cancelled');
         if (queryError) throw queryError;
         matched = (data || []).filter(
           r => normalize(r.phone) === normalize(phone)
         );
       } else {
         matched = getMockRegistrations().filter(
-          r => r.name === name && r.birthdate === birthdate && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted'
+          r => r.name === name && r.birthdate === birthdate && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted' && r.payment_status !== 'cancelled'
         ) as Registration[];
       }
 

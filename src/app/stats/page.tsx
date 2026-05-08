@@ -67,11 +67,12 @@ export default function StatsPage() {
         const { data } = await supabase
           .from('registrations')
           .select('region')
-          .neq('payment_status', 'deleted');
+          .neq('payment_status', 'deleted')
+          .neq('payment_status', 'cancelled');
         regions = data || [];
       } else {
         regions = getMockRegistrations()
-          .filter(r => r.payment_status !== 'deleted')
+          .filter(r => r.payment_status !== 'deleted' && r.payment_status !== 'cancelled')
           .map(r => ({ region: r.region }));
       }
 

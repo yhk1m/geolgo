@@ -16,8 +16,8 @@ interface RegistrationForExamNumber {
 export function computeExamNumbers(registrations: RegistrationForExamNumber[]): Map<string, string> {
   const result = new Map<string, string>();
 
-  // 삭제된 항목은 수험번호 부여에서 제외 → 빈 자리를 다음 활성 신청자가 채움
-  const active = registrations.filter(r => r.payment_status !== 'deleted');
+  // 삭제·신청 취소 항목은 수험번호 부여에서 제외 → 빈 자리를 다음 활성 신청자가 채움
+  const active = registrations.filter(r => r.payment_status !== 'deleted' && r.payment_status !== 'cancelled');
 
   // 지역별로 그룹핑
   const byRegion = new Map<string, RegistrationForExamNumber[]>();

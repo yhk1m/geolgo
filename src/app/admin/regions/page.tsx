@@ -24,7 +24,7 @@ export default function RegionsPage() {
       }
       const map: Record<string, { total: number; pending: number; confirmed: number }> = {};
       for (const r of rows) {
-        if (r.payment_status === 'deleted') continue;
+        if (r.payment_status === 'deleted' || r.payment_status === 'cancelled') continue;
         if (!map[r.region]) map[r.region] = { total: 0, pending: 0, confirmed: 0 };
         map[r.region].total += 1;
         if (r.payment_status === 'confirmed') map[r.region].confirmed += 1;

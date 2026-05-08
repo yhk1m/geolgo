@@ -74,7 +74,7 @@ export function generateMockRegistrations() {
     region: string;
     registration_type: 'individual' | 'group';
     group_id: string | null;
-    payment_status: 'pending' | 'confirmed' | 'deleted';
+    payment_status: 'pending' | 'confirmed' | 'deleted' | 'cancelled';
     payment_amount: number;
     created_at: string;
     birthdate: string | null;
@@ -149,6 +149,22 @@ export function restoreMockRegistrations(ids: string[]) {
   ids.forEach(id => {
     const item = data.find(r => r.id === id);
     if (item) (item as Record<string, unknown>).is_deleted = false;
+  });
+}
+
+export function cancelMockRegistrations(ids: string[]) {
+  const data = getMockRegistrations();
+  ids.forEach(id => {
+    const item = data.find(r => r.id === id);
+    if (item) item.payment_status = 'cancelled';
+  });
+}
+
+export function uncancelMockRegistrations(ids: string[]) {
+  const data = getMockRegistrations();
+  ids.forEach(id => {
+    const item = data.find(r => r.id === id);
+    if (item) item.payment_status = 'pending';
   });
 }
 

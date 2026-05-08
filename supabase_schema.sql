@@ -28,7 +28,7 @@ CREATE TABLE registrations (
   region TEXT NOT NULL,
   registration_type TEXT NOT NULL CHECK (registration_type IN ('individual', 'group')),
   group_id UUID REFERENCES groups(id) ON DELETE SET NULL,
-  payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'confirmed', 'deleted')),
+  payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'confirmed', 'deleted', 'cancelled')),
   payment_amount INTEGER DEFAULT 20000,
   teacher_name TEXT,
   teacher_phone TEXT,

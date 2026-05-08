@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations, getMockExamLocations, setMockExamLocations } from '@/lib/mockdata';
+import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations, cancelMockRegistrations, uncancelMockRegistrations, getMockExamLocations, setMockExamLocations } from '@/lib/mockdata';
 import type { ExamLocation } from '@/lib/mockdata';
 import { regionNameMap, regionShortMap, REGIONS } from '@/lib/regions';
 import { computeExamNumbers } from '@/lib/examNumber';
@@ -56,7 +56,7 @@ interface EditDraft {
   region: string;
 }
 
-type Tab = 'all' | 'pending' | 'confirmed' | 'trash';
+type Tab = 'all' | 'pending' | 'confirmed' | 'trash' | 'cancelled';
 type SortKey = 'type' | 'date';
 type SortDir = 'asc' | 'desc' | 'default';
 
@@ -94,7 +94,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
-  const [deleteMode, setDeleteMode] = useState<'trash' | 'permanent'>('trash');
+  const [deleteMode, setDeleteMode] = useState<'trash' | 'permanent' | 'cancel'>('trash');
   const [restoreTargetIds, setRestoreTargetIds] = useState<string[]>([]);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restorePasswordInput, setRestorePasswordInput] = useState('');
@@ -244,7 +244,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     [data, regionFilter]
   );
 
-  function requestDelete(ids: string[], mode: 'trash' | 'permanent' = 'trash') {
+  function requestDelete(ids: string[], mode: 'trash' | 'permanent' | 'cancel' = 'trash') {
     setDeleteTargetIds(ids);
     setDeleteMode(mode);
     setPasswordInput('');
@@ -273,6 +273,19 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
       }
       setData(prev => prev.map(r =>
         idsToDelete.includes(r.id) ? { ...r, payment_status: 'deleted' } : r
+      ));
+    } else if (deleteMode === 'cancel') {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from('registrations')
+          .update({ payment_status: 'cancelled' })
+          .in('id', idsToDelete);
+        if (error) { alert('신청 취소 처리에 실패했습니다: ' + error.message); return; }
+      } else {
+        cancelMockRegistrations(idsToDelete);
+      }
+      setData(prev => prev.map(r =>
+        idsToDelete.includes(r.id) ? { ...r, payment_status: 'cancelled' } : r
       ));
     } else {
       if (isSupabaseConfigured) {
@@ -305,12 +318,18 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     setShowRestoreModal(false);
 
     const idsToRestore = [...restoreTargetIds];
+    const fromCancelled = idsToRestore.some(id => {
+      const reg = data.find(r => r.id === id);
+      return reg?.payment_status === 'cancelled';
+    });
     if (isSupabaseConfigured) {
       const { error } = await supabase
         .from('registrations')
         .update({ payment_status: 'pending' })
         .in('id', idsToRestore);
       if (error) { alert('복원에 실패했습니다: ' + error.message); return; }
+    } else if (fromCancelled) {
+      uncancelMockRegistrations(idsToRestore);
     } else {
       restoreMockRegistrations(idsToRestore);
     }
@@ -395,13 +414,18 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     return ' ↕';
   }
 
-  const activeData = scopedData.filter(r => r.payment_status !== 'deleted');
+  const activeData = scopedData.filter(r => r.payment_status !== 'deleted' && r.payment_status !== 'cancelled');
   const trashed = scopedData.filter(r => r.payment_status === 'deleted');
+  const cancelledList = scopedData.filter(r => r.payment_status === 'cancelled');
   const pending = activeData.filter(r => r.payment_status === 'pending');
   const confirmed = activeData.filter(r => r.payment_status === 'confirmed');
 
   const filtered = useMemo(() => {
-    const base = tab === 'trash' ? trashed : tab === 'all' ? activeData : tab === 'pending' ? pending : confirmed;
+    const base = tab === 'trash' ? trashed
+      : tab === 'cancelled' ? cancelledList
+      : tab === 'all' ? activeData
+      : tab === 'pending' ? pending
+      : confirmed;
 
     let result = base;
     if (search) {
@@ -428,7 +452,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     }
 
     return result;
-  }, [tab, scopedData, activeData, trashed, pending, confirmed, search, sortKey, sortDir]);
+  }, [tab, scopedData, activeData, trashed, cancelledList, pending, confirmed, search, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -436,6 +460,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
 
   const showCheckbox = (tab === 'pending' || tab === 'confirmed') && !readOnly;
   const isTrashTab = tab === 'trash';
+  const isCancelTab = tab === 'cancelled';
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -492,6 +517,20 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     XLSX.utils.book_append_sheet(wb, ws, label);
     const fileScope = regionFilter ? `_${regionShortMap[regionFilter] || regionFilter}` : '';
     XLSX.writeFile(wb, `지리올림피아드${fileScope}_${label}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  function downloadCancelledExcel() {
+    const rows = cancelledList.map(r => ({
+      '이름': r.name,
+      '학교': r.school,
+      '생년월일': r.birthdate || '',
+      '연락처': r.phone,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '신청취소');
+    const fileScope = regionFilter ? `_${regionShortMap[regionFilter] || regionFilter}` : '';
+    XLSX.writeFile(wb, `지리올림피아드${fileScope}_신청취소_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function handleDownloadRoster() {
@@ -779,6 +818,16 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               휴지통 ({trashed.length})
             </button>
           )}
+          {!readOnly && (
+            <button
+              onClick={() => changeTab('cancelled')}
+              className={`px-3 sm:px-4 py-[10px] text-xs sm:text-sm font-medium whitespace-nowrap ${
+                tab === 'cancelled' ? 'bg-[#c80] text-white' : 'bg-white text-[#999]'
+              }`}
+            >
+              신청 취소 ({cancelledList.length})
+            </button>
+          )}
         </div>
         <input
           type="text"
@@ -847,6 +896,32 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
             </button>
           </div>
         )}
+        {!readOnly && isCancelTab && selected.size > 0 && (
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <button
+              onClick={() => requestRestore(Array.from(selected))}
+              className="text-xs sm:text-sm px-4 py-1.5 text-white bg-[#111] hover:bg-[#333] rounded-md"
+            >
+              선택 복원 ({selected.size}명)
+            </button>
+            <button
+              onClick={() => requestDelete(Array.from(selected), 'permanent')}
+              className="text-xs sm:text-sm px-4 py-1.5 text-white bg-[#c00] hover:bg-[#a00] rounded-md"
+            >
+              영구 삭제 ({selected.size}명)
+            </button>
+          </div>
+        )}
+        {!readOnly && isCancelTab && selected.size === 0 && cancelledList.length > 0 && (
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <button
+              onClick={downloadCancelledExcel}
+              className="text-xs sm:text-sm px-4 py-1.5 text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-md"
+            >
+              엑셀 다운로드 ({cancelledList.length}명)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 전체 선택 안내 배너 */}
@@ -895,7 +970,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               >
                 유형{sortIndicator('type')}
               </th>
-              {(tab === 'all' || isTrashTab) && <th>입금</th>}
+              {(tab === 'all' || isTrashTab || isCancelTab) && <th>입금</th>}
               <th className="hidden sm:table-cell">금액</th>
               <th
                 onClick={() => toggleSort('date')}
@@ -903,7 +978,8 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               >
                 신청일{sortIndicator('date')}
               </th>
-              {!readOnly && !isTrashTab && <th>관리</th>}
+              {!readOnly && !isTrashTab && !isCancelTab && <th>관리</th>}
+              {!readOnly && isCancelTab && <th>관리</th>}
             </tr>
           </thead>
           <tbody>
@@ -936,12 +1012,17 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                   <span className="hidden sm:inline">{regionNameMap[r.region] || r.region}</span>
                 </td>
                 <td>{r.registration_type === 'group' ? '단체' : '개인'}</td>
-                {(tab === 'all' || isTrashTab) && (
+                {(tab === 'all' || isTrashTab || isCancelTab) && (
                   <td>
                     <span className={`badge ${
-                      r.payment_status === 'confirmed' ? 'badge-confirmed' : 'badge-pending'
+                      r.payment_status === 'confirmed' ? 'badge-confirmed'
+                        : r.payment_status === 'cancelled' ? 'badge-pending'
+                        : 'badge-pending'
                     }`}>
-                      {r.payment_status === 'confirmed' ? '확인' : '대기'}
+                      {r.payment_status === 'confirmed' ? '확인'
+                        : r.payment_status === 'cancelled' ? '취소'
+                        : r.payment_status === 'deleted' ? '삭제'
+                        : '대기'}
                     </span>
                   </td>
                 )}
@@ -954,7 +1035,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                     {new Date(r.created_at).toLocaleDateString('ko-KR')}
                   </span>
                 </td>
-                {!readOnly && !isTrashTab && (
+                {!readOnly && !isTrashTab && !isCancelTab && (
                   <td>
                     <div className="flex items-center gap-4">
                       {showCheckbox && (
@@ -988,6 +1069,24 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                       >
                         삭제
                       </button>
+                      <button
+                        onClick={() => requestDelete([r.id], 'cancel')}
+                        className="px-3 py-1 text-xs font-medium text-[#c80] bg-white hover:bg-[#fff7e6] border border-[#e8c896] rounded"
+                      >
+                        신청 취소
+                      </button>
+                    </div>
+                  </td>
+                )}
+                {!readOnly && isCancelTab && (
+                  <td>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => requestRestore([r.id])}
+                        className="px-3 py-1 text-xs font-medium text-[#111] bg-white hover:bg-[#f5f5f5] border border-[#ddd] rounded"
+                      >
+                        복원
+                      </button>
                     </div>
                   </td>
                 )}
@@ -996,7 +1095,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
             {paged.length === 0 && (
               <tr>
                 <td colSpan={12} className="text-center py-8 text-[#999]">
-                  {search ? '검색 결과가 없습니다.' : isTrashTab ? '휴지통이 비어 있습니다.' : '데이터가 없습니다.'}
+                  {search ? '검색 결과가 없습니다.' : isTrashTab ? '휴지통이 비어 있습니다.' : isCancelTab ? '신청 취소된 참가자가 없습니다.' : '데이터가 없습니다.'}
                 </td>
               </tr>
             )}
@@ -1049,11 +1148,15 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-[360px] shadow-xl">
             <h3 className="text-lg font-bold mb-2 text-[#111]">
-              {deleteMode === 'permanent' ? '영구 삭제 확인' : '삭제 확인'}
+              {deleteMode === 'permanent' ? '영구 삭제 확인'
+                : deleteMode === 'cancel' ? '신청 취소 확인'
+                : '삭제 확인'}
             </h3>
             <p className="text-sm text-[#666] mb-4">
               {deleteMode === 'permanent'
                 ? `${deleteTargetIds.length}건을 영구 삭제합니다. 이 작업은 되돌릴 수 없습니다.`
+                : deleteMode === 'cancel'
+                ? `${deleteTargetIds.length}건의 신청을 취소 처리합니다. 환불 명단에서 확인할 수 있습니다.`
                 : `${deleteTargetIds.length}건을 휴지통으로 이동합니다.`}
               <br />관리자 비밀번호를 입력해주세요.
             </p>
@@ -1079,9 +1182,15 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               </button>
               <button
                 onClick={executeDelete}
-                className="px-4 py-2 text-sm text-white bg-[#c00] rounded-md hover:bg-[#a00]"
+                className={`px-4 py-2 text-sm text-white rounded-md ${
+                  deleteMode === 'cancel'
+                    ? 'bg-[#c80] hover:bg-[#a60]'
+                    : 'bg-[#c00] hover:bg-[#a00]'
+                }`}
               >
-                {deleteMode === 'permanent' ? '영구 삭제' : '삭제'}
+                {deleteMode === 'permanent' ? '영구 삭제'
+                  : deleteMode === 'cancel' ? '신청 취소'
+                  : '삭제'}
               </button>
             </div>
           </div>

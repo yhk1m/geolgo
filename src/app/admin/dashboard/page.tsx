@@ -48,11 +48,12 @@ export default function AdminDashboard() {
           .from('registrations')
           .select('*')
           .neq('payment_status', 'deleted')
+          .neq('payment_status', 'cancelled')
           .order('created_at', { ascending: false });
         all = data || [];
       } else {
         all = getMockRegistrations()
-          .filter(r => r.payment_status !== 'deleted')
+          .filter(r => r.payment_status !== 'deleted' && r.payment_status !== 'cancelled')
           .sort(
             (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           );
