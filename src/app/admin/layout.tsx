@@ -12,6 +12,7 @@ const FULL_NAV = [
   { href: '/admin/regions', label: '지역별 대시보드' },
   { href: '/admin/payments', label: '참가자 관리' },
   { href: '/admin/content', label: '대회 안내 관리' },
+  { href: '/admin/usage', label: 'Supabase 사용량' },
 ];
 
 const VIEWER_NAV = [
