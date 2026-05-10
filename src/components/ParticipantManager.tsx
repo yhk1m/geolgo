@@ -318,24 +318,36 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     setShowRestoreModal(false);
 
     const idsToRestore = [...restoreTargetIds];
-    const fromCancelled = idsToRestore.some(id => {
-      const reg = data.find(r => r.id === id);
-      return reg?.payment_status === 'cancelled';
-    });
+    // 휴지통(deleted) 복구는 created_at을 갱신해 맨 뒤에 붙임
+    // → 기존 활성 신청자들의 수험번호가 한 칸씩 밀리는 문제 방지
+    const deletedIds = idsToRestore.filter(id => data.find(r => r.id === id)?.payment_status === 'deleted');
+    const cancelledIds = idsToRestore.filter(id => data.find(r => r.id === id)?.payment_status === 'cancelled');
+    const restoreTime = new Date().toISOString();
+
     if (isSupabaseConfigured) {
-      const { error } = await supabase
-        .from('registrations')
-        .update({ payment_status: 'pending' })
-        .in('id', idsToRestore);
-      if (error) { alert('복원에 실패했습니다: ' + error.message); return; }
-    } else if (fromCancelled) {
-      uncancelMockRegistrations(idsToRestore);
+      if (deletedIds.length > 0) {
+        const { error } = await supabase
+          .from('registrations')
+          .update({ payment_status: 'pending', created_at: restoreTime })
+          .in('id', deletedIds);
+        if (error) { alert('복원에 실패했습니다: ' + error.message); return; }
+      }
+      if (cancelledIds.length > 0) {
+        const { error } = await supabase
+          .from('registrations')
+          .update({ payment_status: 'pending' })
+          .in('id', cancelledIds);
+        if (error) { alert('복원에 실패했습니다: ' + error.message); return; }
+      }
     } else {
-      restoreMockRegistrations(idsToRestore);
+      if (cancelledIds.length > 0) uncancelMockRegistrations(cancelledIds);
+      if (deletedIds.length > 0) restoreMockRegistrations(deletedIds);
     }
-    setData(prev => prev.map(r =>
-      idsToRestore.includes(r.id) ? { ...r, payment_status: 'pending' } : r
-    ));
+    setData(prev => prev.map(r => {
+      if (deletedIds.includes(r.id)) return { ...r, payment_status: 'pending', created_at: restoreTime };
+      if (cancelledIds.includes(r.id)) return { ...r, payment_status: 'pending' };
+      return r;
+    }));
     setSelected(new Set());
     setRestoreTargetIds([]);
   }

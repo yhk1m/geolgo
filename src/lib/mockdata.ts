@@ -146,9 +146,15 @@ export function softDeleteMockRegistrations(ids: string[]) {
 
 export function restoreMockRegistrations(ids: string[]) {
   const data = getMockRegistrations();
+  // 휴지통 복구 시 created_at을 현재 시각으로 갱신 → 맨 뒤로 정렬되어 기존 학생 수험번호 변동 없음
+  const now = new Date().toISOString();
   ids.forEach(id => {
     const item = data.find(r => r.id === id);
-    if (item) (item as Record<string, unknown>).is_deleted = false;
+    if (item) {
+      (item as Record<string, unknown>).is_deleted = false;
+      item.payment_status = 'pending';
+      item.created_at = now;
+    }
   });
 }
 
