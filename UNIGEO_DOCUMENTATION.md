@@ -37,8 +37,13 @@ src/
 ├── app/
 │   ├── admin/
 │   │   ├── dashboard/page.tsx     # 관리자 대시보드
-│   │   ├── payments/page.tsx      # 참가자 관리 (입금 확인)
-│   │   ├── layout.tsx             # 관리자 인증 레이아웃
+│   │   ├── regions/
+│   │   │   ├── page.tsx           # 지역별 대시보드 (조회 전용 권한 가능)
+│   │   │   └── [code]/page.tsx    # 지역 상세
+│   │   ├── payments/page.tsx      # 참가자 관리 (입금 확인 + 휴지통 + 신청 취소)
+│   │   ├── content/page.tsx       # 대회 안내 관리 (메인 페이지 콘텐츠)
+│   │   ├── usage/page.tsx         # Supabase 사용량 모니터링 (Free Plan)
+│   │   ├── layout.tsx             # 관리자 인증 레이아웃 (full/viewer 권한)
 │   │   └── page.tsx               # /admin → dashboard 리다이렉트
 │   ├── register/
 │   │   ├── individual/page.tsx    # 개인 참가 신청
@@ -51,6 +56,8 @@ src/
 ├── components/
 │   ├── Navigation.tsx             # 상단 네비게이션
 │   ├── Footer.tsx                 # 하단 푸터
+│   ├── ParticipantManager.tsx     # 참가자 관리 테이블/모달
+│   ├── PhotoEditor.tsx            # 사진 편집(크롭) 모달
 │   └── RegionMap.tsx              # 지도 시각화 컴포넌트
 ├── lib/
 │   ├── supabase.ts                # Supabase 클라이언트 설정
@@ -59,7 +66,10 @@ src/
 │   ├── examNumber.ts              # 수험번호 생성/관리
 │   ├── examTicket.ts              # 수험표 PDF 생성
 │   ├── pdfFont.ts                 # PDF 폰트 설정 (한글)
-│   └── photoRoster.ts             # 사진명렬표 PDF 생성
+│   ├── photoRoster.ts             # 사진명렬표 PDF 생성
+│   ├── pageContent.ts             # 메인 페이지 콘텐츠 로더
+│   ├── cropImage.ts               # 이미지 크롭 유틸
+│   └── resizeImage.ts             # 이미지 리사이즈 유틸
 public/
 └── geo/
     └── korea_sido_final.geojson   # 대한민국 시도 GeoJSON
@@ -130,15 +140,23 @@ public/
 
 ### 6. 관리자 대시보드 (`/admin/dashboard`)
 
-- 비밀번호 인증 (`admin0220`, sessionStorage 기반)
+- 비밀번호 인증 (sessionStorage 기반, 두 단계 권한)
+  - `admin0220` — **full**: 모든 탭 접근 (대시보드/지역별/참가자/대회 안내/Supabase 사용량)
+  - `geopia2026` — **viewer**: 조회 전용 (대시보드/지역별만 접근, 그 외 경로 진입 시 자동 리다이렉트)
 - **요약 카드**: 총 신청자, 입금 확인/대기, 확인된 금액, 개인/단체, 미확인 금액
 - **지역별 신청 현황**: 프로그레스 바 목록
 - **최근 신청 목록**: 최근 15명, 이름/학교/날짜/입금 상태
 - 실시간 업데이트 (Supabase Realtime)
 
-### 7. 참가자 관리 (`/admin/payments`)
+### 7. 지역별 대시보드 (`/admin/regions`)
 
-- **탭 필터**: 전체 명단 / 입금 대기 / 입금 확인 / 휴지통
+- 17개 광역자치단체별 신청자 수 / 입금 확인 / 입금 대기 집계
+- 지역 클릭 시 `/admin/regions/[code]` 로 이동하여 해당 지역 상세 명단 확인
+- viewer 권한도 접근 가능 (조회 전용)
+
+### 8. 참가자 관리 (`/admin/payments`)
+
+- **탭 필터**: 전체 명단 / 입금 대기 / 입금 확인 / 휴지통 / 신청 취소
 - **검색**: 이름, 학교, 지역으로 검색
 - **정렬**: 접수 유형, 신청일 기준 정렬
 - **페이지네이션**: 10 / 20 / 50건 단위
@@ -151,6 +169,24 @@ public/
 - **수험표 PDF**: 입금 확인된 참가자 일괄 다운로드
 - **사진명렬표 PDF**: 지역별 생성 (진행률 표시 바)
 - **삭제**: 소프트 삭제(휴지통) + 영구 삭제
+- **신청 취소**: 환불 명단 관리용 (`payment_status: 'cancelled'`)
+- **휴지통 복구**: 비밀번호 확인 후 복구. 복구 시 `created_at`을 복구 시각으로 갱신해 **수험번호를 맨 뒤에 부여** → 기존 학생들의 수험번호 변동 방지
+
+### 9. 대회 안내 관리 (`/admin/content`)
+
+- 메인 페이지에 표시되는 대회 일정·요강·문의처 콘텐츠를 직접 편집
+- Supabase `page_content` 테이블에 JSONB로 저장 → 즉시 반영
+
+### 10. Supabase 사용량 모니터링 (`/admin/usage`)
+
+- Supabase Free Plan의 한도 대비 실시간 사용량 확인 페이지
+- **실시간 측정** (JS 클라이언트 직접 조회):
+  - Storage `photos` 버킷 파일 크기 합계 (재귀 list)
+  - 테이블별 row 수 (registrations / groups / exam_locations / edit_logs / page_content) → 평균 행 크기 기반 DB 크기 추정
+- **참고값 표시** (클라이언트 SDK로 조회 불가 → Supabase 대시보드 확인값 사용):
+  - Egress / Cached Egress / Monthly Active Users / Edge Function Invocations / Realtime Messages / Realtime Peak Connections
+- **5개 섹션 구성**: 핵심 요약 카드 / 항목별 사용량 테이블 / 테이블별 row breakdown / 청구 주기(매월 28일 리셋) 영향 / 종합 진단 (Stable·Warning 자동 전환)
+- **새로고침 버튼**으로 언제든 재측정
 
 ---
 
@@ -174,6 +210,9 @@ public/
 - 지역별로 `created_at` 순서대로 부여
 - 분반당 최대 70명
 - 70번 이후 → 다음 분반 01번으로 초기화
+- **휴지통(`payment_status='deleted'`) / 신청 취소(`'cancelled'`) 항목은 자리 부여에서 제외** → 빈 자리는 다음 활성 신청자가 자동으로 채움
+- **휴지통 복구 시 수험번호는 맨 뒤로 부여** (복구 시 `created_at`을 복구 시각으로 갱신) → 기존 활성 신청자들의 수험번호가 한 칸씩 밀리는 문제 방지
+- **중복 신청 차단**: 이름 + 생년월일 + 전화번호(숫자만 비교)가 모두 동일한 활성 신청이 이미 있으면 모달로 안내 후 차단
 
 ### 예시 (서울, 지역번호 01)
 
@@ -232,7 +271,7 @@ public/
 | region | TEXT | 지역 (영문) |
 | registration_type | TEXT | 'individual' 또는 'group' |
 | group_id | UUID (FK, nullable) | 소속 그룹 ID |
-| payment_status | TEXT | 'pending', 'confirmed', 'deleted' |
+| payment_status | TEXT | 'pending', 'confirmed', 'deleted', 'cancelled' |
 | payment_amount | INTEGER | 참가비 (기본 20,000) |
 | teacher_name | TEXT (nullable) | 지도교사명 (개인접수) |
 | teacher_phone | TEXT (nullable) | 교사 연락처 (개인접수) |
@@ -257,6 +296,14 @@ public/
 | registration_id | UUID (FK) | 대상 등록 ID |
 | changed_fields | JSONB | 변경된 필드 내역 |
 | created_at | TIMESTAMPTZ | 변경일시 |
+
+### `page_content` 테이블
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | TEXT (PK) | 콘텐츠 키 (기본 `'main'`) |
+| content | JSONB | 메인 페이지 콘텐츠 (일정/요강/문의처) |
+| updated_at | TIMESTAMPTZ | 수정일시 |
 
 ### Storage
 
@@ -451,12 +498,18 @@ Supabase가 설정되지 않은 환경(`isSupabaseConfigured === false`)에서 �
 ### 관리자 워크플로우
 
 ```
-비밀번호 로그인 → 대시보드 확인 → 참가자 관리
-→ 입금 확인/취소 (개별 또는 일괄)
+비밀번호 로그인 (admin0220 = full / geopia2026 = viewer 조회 전용)
+→ 대시보드 확인 → 지역별 대시보드
+→ 참가자 관리
+   - 입금 확인/취소 (개별 또는 일괄)
+   - 신청 취소(환불) / 휴지통 이동 / 영구 삭제
+   - 휴지통 복구 (비밀번호 확인, 수험번호는 맨 뒤로 부여)
 → 엑셀 내보내기 (전체/대기/확인, 수험번호 포함)
 → 시험장소 설정
 → 수험표 PDF 일괄 생성
 → 사진명렬표 PDF 지역별 생성
+→ 대회 안내 관리 (메인 페이지 콘텐츠 편집)
+→ Supabase 사용량 모니터링 (Free Plan 한도 대비 실시간 사용률 확인)
 ```
 
 ---
