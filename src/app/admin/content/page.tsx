@@ -174,31 +174,31 @@ export default function AdminContentPage() {
           </div>
         </section>
 
-        {/* 대회 안내 이미지 */}
+        {/* 대회 안내 포스터 */}
         <section className="p-5 rounded-lg border border-[#e5e5e5] bg-white">
-          <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4">대회 안내 이미지</h2>
-          <p className="text-xs text-[#999] mb-3">업로드된 이미지가 메인 페이지의 &quot;대회 안내 이미지 저장&quot; 버튼에 연결됩니다.</p>
+          <h2 className="text-sm font-semibold text-[#999] uppercase tracking-wider mb-4">대회 안내 포스터</h2>
+          <p className="text-xs text-[#999] mb-3">업로드된 PDF가 메인 페이지의 &quot;대회 안내 포스터 저장&quot; 버튼에 연결됩니다.</p>
           {content.announcementImageUrl && (
             <div className="mb-3 flex items-center gap-3">
-              <img src={content.announcementImageUrl} alt="대회 안내" className="h-24 object-contain rounded border border-[#e5e5e5]" />
+              <span className="text-2xl">📄</span>
               <div className="flex flex-col gap-1">
                 <a href={content.announcementImageUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline truncate max-w-xs">
-                  현재 이미지 보기
+                  현재 PDF 보기
                 </a>
                 <button
                   onClick={() => setContent(prev => ({ ...prev, announcementImageUrl: undefined }))}
                   className="text-red-500 hover:text-red-700 text-sm text-left"
                 >
-                  이미지 제거
+                  PDF 제거
                 </button>
               </div>
             </div>
           )}
           <label className={`btn btn-secondary text-sm px-4 py-1.5 cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            {uploading ? '업로드 중...' : '이미지 업로드'}
+            {uploading ? '업로드 중...' : 'PDF 업로드'}
             <input
               type="file"
-              accept="image/*"
+              accept=".pdf"
               className="hidden"
               onChange={async e => {
                 const file = e.target.files?.[0];
@@ -208,8 +208,7 @@ export default function AdminContentPage() {
                   return;
                 }
                 setUploading(true);
-                const ext = file.name.split('.').pop() || 'png';
-                const path = `announcement/announcement_${Date.now()}.${ext}`;
+                const path = `announcement/announcement_${Date.now()}.pdf`;
                 const { error } = await supabase.storage.from('photos').upload(path, file, { upsert: true });
                 if (error) {
                   alert('업로드 실패: ' + error.message);
