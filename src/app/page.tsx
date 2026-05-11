@@ -35,13 +35,13 @@ export default async function HomePage() {
           </Link>
           {content.announcementImageUrl && (
             <a
-              href={content.announcementImageUrl}
+              href="/2026 제26회 전국지리올림피아드.pdf"
               target="_blank"
               rel="noopener noreferrer"
               download
               className="btn btn-secondary text-base px-8 py-3"
             >
-              대회 안내 이미지 저장
+              대회 안내 포스터 저장
             </a>
           )}
         </div>
