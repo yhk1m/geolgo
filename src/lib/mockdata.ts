@@ -22,10 +22,17 @@ const MOCK_SCHOOLS: Record<string, string[]> = {
 
 const FIRST_NAMES = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '류', '홍'];
 const GIVEN_NAMES = ['민준', '서윤', '도윤', '서연', '하준', '지우', '시우', '하은', '주원', '지호', '지한', '수빈', '예준', '소율', '건우', '지민', '현우', '채원', '준서', '수아', '지훈', '유진', '태윤', '예은', '승현'];
+const TEACHER_GIVEN_NAMES = ['성호', '재현', '은영', '미경', '동훈', '수정', '경철', '혜진', '상윤', '주은', '태경', '윤정', '석민', '하늘', '진욱', '나래'];
 
 function randomName() {
   const last = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
   const given = GIVEN_NAMES[Math.floor(Math.random() * GIVEN_NAMES.length)];
+  return last + given;
+}
+
+function randomTeacherName() {
+  const last = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+  const given = TEACHER_GIVEN_NAMES[Math.floor(Math.random() * TEACHER_GIVEN_NAMES.length)];
   return last + given;
 }
 
@@ -80,6 +87,9 @@ export function generateMockRegistrations() {
     birthdate: string | null;
     photo_url: string | null;
     is_deleted: boolean;
+    teacher_name: string | null;
+    teacher_phone: string | null;
+    teacher_email: string | null;
   }[] = [];
 
   let idCounter = 1;
@@ -88,12 +98,24 @@ export function generateMockRegistrations() {
     const count = REGION_WEIGHTS[region.nameEn] || 5;
     const schools = MOCK_SCHOOLS[region.nameEn] || ['기타고'];
 
+    // 학교별 지도교사 고정 (같은 학교의 단체는 같은 교사)
+    const schoolTeacher: Record<string, { name: string; phone: string; email: string | null }> = {};
+    for (const s of schools) {
+      schoolTeacher[s] = {
+        name: randomTeacherName(),
+        phone: randomPhone(),
+        email: Math.random() > 0.3 ? `teacher_${s}@school.kr` : null,
+      };
+    }
+
     for (let i = 0; i < count; i++) {
       const school = schools[Math.floor(Math.random() * schools.length)];
       const isGroup = Math.random() > 0.6;
       const daysAgo = Math.floor(Math.random() * 20);
       const date = new Date();
       date.setDate(date.getDate() - daysAgo);
+
+      const t = schoolTeacher[school];
 
       registrations.push({
         id: String(idCounter++),
@@ -111,6 +133,9 @@ export function generateMockRegistrations() {
         birthdate: randomBirthdate(),
         photo_url: null,
         is_deleted: false,
+        teacher_name: t.name,
+        teacher_phone: t.phone,
+        teacher_email: t.email,
       });
     }
   }

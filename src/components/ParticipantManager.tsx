@@ -31,12 +31,31 @@ interface Registration {
   photo_url: string | null;
   class_name?: string | null;
   group_id?: string | null;
+  teacher_name?: string | null;
+  teacher_phone?: string | null;
+  teacher_email?: string | null;
 }
 
 interface TeacherInfo {
   teacher_name: string;
   teacher_phone: string;
   teacher_email: string | null;
+}
+
+interface GroupInfo {
+  teacher_name: string;
+  teacher_phone: string;
+  teacher_email: string | null;
+  region: string;
+  school_name: string;
+}
+
+interface TeacherDetail {
+  name: string;
+  region: string;
+  school: string;
+  phone: string;
+  email: string | null;
 }
 
 interface EditLog {
@@ -117,11 +136,59 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
   const [editingPhotoSource, setEditingPhotoSource] = useState<File | null>(null);
+  const [groupsMap, setGroupsMap] = useState<Record<string, GroupInfo>>({});
+  const [teacherDetail, setTeacherDetail] = useState<TeacherDetail | null>(null);
 
   useEffect(() => {
     loadData();
     loadExamLocations();
+    loadGroups();
   }, []);
+
+  async function loadGroups() {
+    if (!isSupabaseConfigured) return;
+    const { data: groups } = await supabase
+      .from('groups')
+      .select('id, teacher_name, teacher_phone, teacher_email, region, school_name');
+    if (groups) {
+      const map: Record<string, GroupInfo> = {};
+      for (const g of groups) {
+        map[g.id] = {
+          teacher_name: g.teacher_name || '',
+          teacher_phone: g.teacher_phone || '',
+          teacher_email: g.teacher_email || null,
+          region: g.region || '',
+          school_name: g.school_name || '',
+        };
+      }
+      setGroupsMap(map);
+    }
+  }
+
+  function getTeacherDetail(r: Registration): TeacherDetail | null {
+    // 단체 신청: groups 테이블에서 교사 정보
+    if (r.registration_type === 'group' && r.group_id && groupsMap[r.group_id]) {
+      const g = groupsMap[r.group_id];
+      return {
+        name: g.teacher_name,
+        region: g.region || r.region,
+        school: g.school_name || r.school,
+        phone: g.teacher_phone,
+        email: g.teacher_email,
+      };
+    }
+    // 개인 신청 (또는 mock 단체): registrations 행의 teacher_* 필드 사용
+    if (r.teacher_name) {
+      return {
+        name: r.teacher_name,
+        region: r.region,
+        school: r.school,
+        phone: r.teacher_phone || '',
+        email: r.teacher_email || null,
+      };
+    }
+    return null;
+  }
 
   async function loadData() {
     try {
@@ -982,6 +1049,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               >
                 유형{sortIndicator('type')}
               </th>
+              <th>지도교사</th>
               {(tab === 'all' || isTrashTab || isCancelTab) && <th>입금</th>}
               <th className="hidden sm:table-cell">금액</th>
               <th
@@ -1024,6 +1092,21 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                   <span className="hidden sm:inline">{regionNameMap[r.region] || r.region}</span>
                 </td>
                 <td>{r.registration_type === 'group' ? '단체' : '개인'}</td>
+                <td className="whitespace-nowrap">
+                  {(() => {
+                    const t = getTeacherDetail(r);
+                    if (!t || !t.name) return <span className="text-[#bbb]">-</span>;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setTeacherDetail(t)}
+                        className="hover:underline hover:text-blue-600 cursor-pointer text-[#111]"
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })()}
+                </td>
                 {(tab === 'all' || isTrashTab || isCancelTab) && (
                   <td>
                     <span className={`badge ${
@@ -1106,7 +1189,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
             ))}
             {paged.length === 0 && (
               <tr>
-                <td colSpan={12} className="text-center py-8 text-[#999]">
+                <td colSpan={13} className="text-center py-8 text-[#999]">
                   {search ? '검색 결과가 없습니다.' : isTrashTab ? '휴지통이 비어 있습니다.' : isCancelTab ? '신청 취소된 참가자가 없습니다.' : '데이터가 없습니다.'}
                 </td>
               </tr>
@@ -1583,6 +1666,44 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
           onCancel={() => setEditingPhotoSource(null)}
           onApply={applyEditedAdminPhoto}
         />
+      )}
+
+      {/* 지도교사 정보 모달 */}
+      {teacherDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setTeacherDetail(null)}>
+          <div className="bg-white rounded-xl p-6 w-[360px] shadow-xl mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4 text-[#111]">지도교사 정보</h3>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">이름</span>
+                <span className="text-[#111] font-medium">{teacherDetail.name}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">지역</span>
+                <span className="text-[#111]">{regionNameMap[teacherDetail.region] || teacherDetail.region || '-'}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">학교명</span>
+                <span className="text-[#111]">{teacherDetail.school || '-'}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">전화번호</span>
+                <span className="text-[#111]">{teacherDetail.phone || '-'}</span>
+              </div>
+              <div className="grid grid-cols-[72px_1fr] gap-1">
+                <span className="text-[#999]">이메일</span>
+                <span className="text-[#111] break-all">{teacherDetail.email || '-'}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTeacherDetail(null)}
+              className="mt-5 w-full py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-lg hover:bg-[#f5f5f5]"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
