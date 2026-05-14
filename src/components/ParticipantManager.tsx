@@ -73,6 +73,9 @@ interface EditDraft {
   email: string;
   birthdate: string;
   region: string;
+  teacher_name: string;
+  teacher_phone: string;
+  teacher_email: string;
 }
 
 type Tab = 'all' | 'pending' | 'confirmed' | 'trash' | 'cancelled';
@@ -509,11 +512,17 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     let result = base;
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(r =>
-        r.name.toLowerCase().includes(q) ||
-        r.school.toLowerCase().includes(q) ||
-        (regionNameMap[r.region] || r.region).toLowerCase().includes(q)
-      );
+      result = result.filter(r => {
+        const teacherName = r.registration_type === 'group' && r.group_id && groupsMap[r.group_id]
+          ? groupsMap[r.group_id].teacher_name
+          : r.teacher_name || '';
+        return (
+          r.name.toLowerCase().includes(q) ||
+          r.school.toLowerCase().includes(q) ||
+          (regionNameMap[r.region] || r.region).toLowerCase().includes(q) ||
+          (teacherName || '').toLowerCase().includes(q)
+        );
+      });
     }
 
     if (sortKey && sortDir !== 'default') {
@@ -531,7 +540,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     }
 
     return result;
-  }, [tab, scopedData, activeData, trashed, cancelledList, pending, confirmed, search, sortKey, sortDir]);
+  }, [tab, scopedData, activeData, trashed, cancelledList, pending, confirmed, search, sortKey, sortDir, groupsMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -675,6 +684,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
 
   function openEditModal(r: Registration) {
     setEditTarget(r);
+    const t = getTeacherDetail(r);
     setEditDraft({
       name: r.name,
       school: r.school,
@@ -684,6 +694,9 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
       email: r.email || '',
       birthdate: r.birthdate || '',
       region: r.region,
+      teacher_name: t?.name || '',
+      teacher_phone: t?.phone || '',
+      teacher_email: t?.email || '',
     });
     setEditPhotoFile(null);
     setEditPhotoPreview(r.photo_url || null);
@@ -714,12 +727,24 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
       const fieldLabels: Record<string, string> = {
         name: '이름', school: '학교', grade: '학년', class_name: '반',
         phone: '전화번호', email: '이메일', birthdate: '생년월일', region: '지역',
+        teacher_name: '지도교사 이름', teacher_phone: '지도교사 전화번호', teacher_email: '지도교사 이메일',
       };
+      const TEACHER_KEYS: (keyof EditDraft)[] = ['teacher_name', 'teacher_phone', 'teacher_email'];
+      const isGroup = editTarget.registration_type === 'group';
+      const currentTeacher = getTeacherDetail(editTarget);
+      const oldTeacherMap: Record<string, string> = {
+        teacher_name: currentTeacher?.name || '',
+        teacher_phone: currentTeacher?.phone || '',
+        teacher_email: currentTeacher?.email || '',
+      };
+
       const changes: Record<string, { old: string; new: string }> = {};
       const updates: Record<string, string | number | null> = {};
+      const groupUpdates: Record<string, string | null> = {};
 
       for (const key of Object.keys(editDraft) as (keyof EditDraft)[]) {
-        const oldVal = key === 'grade' ? String(editTarget.grade)
+        const oldVal = TEACHER_KEYS.includes(key) ? oldTeacherMap[key]
+          : key === 'grade' ? String(editTarget.grade)
           : key === 'class_name' ? (editTarget.class_name || '')
           : key === 'email' ? (editTarget.email || '')
           : key === 'birthdate' ? (editTarget.birthdate || '')
@@ -727,7 +752,14 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
         const newVal = editDraft[key];
         if (oldVal !== newVal) {
           changes[fieldLabels[key] || key] = { old: oldVal, new: newVal };
-          if (key === 'grade') updates[key] = parseInt(newVal);
+          if (TEACHER_KEYS.includes(key)) {
+            // Supabase 모드의 단체: groups 테이블; 그 외(개인/Mock): registrations 행
+            if (isGroup && isSupabaseConfigured) {
+              groupUpdates[key] = newVal || null;
+            } else {
+              updates[key] = newVal || null;
+            }
+          } else if (key === 'grade') updates[key] = parseInt(newVal);
           else if (key === 'email' || key === 'birthdate' || key === 'class_name') updates[key] = newVal || null;
           else updates[key] = newVal;
         }
@@ -750,11 +782,21 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
       }
 
       if (isSupabaseConfigured) {
-        const { error } = await supabase
-          .from('registrations')
-          .update(updates)
-          .eq('id', editTarget.id);
-        if (error) throw error;
+        if (Object.keys(updates).length > 0) {
+          const { error } = await supabase
+            .from('registrations')
+            .update(updates)
+            .eq('id', editTarget.id);
+          if (error) throw error;
+        }
+
+        if (Object.keys(groupUpdates).length > 0 && editTarget.group_id) {
+          const { error: groupErr } = await supabase
+            .from('groups')
+            .update(groupUpdates)
+            .eq('id', editTarget.group_id);
+          if (groupErr) throw groupErr;
+        }
 
         await supabase.from('edit_logs').insert({
           registration_id: editTarget.id,
@@ -763,6 +805,19 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
       }
 
       setData(prev => prev.map(r => r.id === editTarget.id ? { ...r, ...updates } as Registration : r));
+
+      if (Object.keys(groupUpdates).length > 0 && editTarget.group_id) {
+        setGroupsMap(prev => ({
+          ...prev,
+          [editTarget.group_id!]: {
+            ...(prev[editTarget.group_id!] || { teacher_name: '', teacher_phone: '', teacher_email: null, region: editTarget.region, school_name: editTarget.school }),
+            ...(groupUpdates.teacher_name !== undefined ? { teacher_name: (groupUpdates.teacher_name as string) || '' } : {}),
+            ...(groupUpdates.teacher_phone !== undefined ? { teacher_phone: (groupUpdates.teacher_phone as string) || '' } : {}),
+            ...(groupUpdates.teacher_email !== undefined ? { teacher_email: groupUpdates.teacher_email } : {}),
+          },
+        }));
+      }
+
       setShowEditModal(false);
       alert('수정이 완료되었습니다.');
     } catch {
@@ -912,7 +967,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
           type="text"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="이름, 학교, 지역 검색"
+          placeholder="이름, 학교, 지역, 지도교사 검색"
           className="flex-1 min-w-0 text-sm"
           autoComplete="off"
         />
@@ -1467,6 +1522,27 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                   ))}
                 </select>
               </div>
+
+              {/* 지도교사 정보 */}
+              <div className="pt-3 mt-1 border-t border-[#e5e5e5]">
+                <p className="text-[#111] font-semibold text-sm mb-2">지도교사 정보</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[#999] mb-1">이름</label>
+                    <input type="text" value={editDraft.teacher_name} onChange={e => setEditDraft({ ...editDraft, teacher_name: e.target.value })} className="w-full" placeholder="지도교사 이름" />
+                  </div>
+                  <div>
+                    <label className="block text-[#999] mb-1">전화번호</label>
+                    <input type="tel" value={editDraft.teacher_phone} onChange={e => setEditDraft({ ...editDraft, teacher_phone: e.target.value })} className="w-full" placeholder="010-0000-0000" />
+                  </div>
+                  <div>
+                    <label className="block text-[#999] mb-1">이메일</label>
+                    <input type="email" value={editDraft.teacher_email} onChange={e => setEditDraft({ ...editDraft, teacher_email: e.target.value })} className="w-full" placeholder="(선택) 지도교사 이메일" />
+                  </div>
+                  <p className="text-xs text-[#999]">지도교사의 지역·학교명은 참가자(또는 단체)의 정보를 따릅니다.</p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[#999] mb-1">사진</label>
                 <div className="flex items-center gap-3">
