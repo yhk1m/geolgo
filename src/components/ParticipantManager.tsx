@@ -823,6 +823,29 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
           registration_id: editTarget.id,
           changed_fields: changes,
         });
+
+        // 단체 + 지도교사 변경 시, 같은 단체의 다른 학생에게도 지도교사 변경 이력 기록
+        if (isGroup && editTarget.group_id) {
+          const teacherChangeEntries = Object.entries(changes).filter(([k]) =>
+            ['지도교사 이름', '지도교사 전화번호', '지도교사 이메일'].includes(k)
+          );
+          if (teacherChangeEntries.length > 0) {
+            const otherStudents = data.filter(r =>
+              r.group_id === editTarget.group_id &&
+              r.id !== editTarget.id &&
+              r.payment_status !== 'deleted'
+            );
+            if (otherStudents.length > 0) {
+              const teacherOnlyChanges = Object.fromEntries(teacherChangeEntries);
+              await supabase.from('edit_logs').insert(
+                otherStudents.map(s => ({
+                  registration_id: s.id,
+                  changed_fields: teacherOnlyChanges,
+                }))
+              );
+            }
+          }
+        }
       }
 
       setData(prev => prev.map(r => r.id === editTarget.id ? { ...r, ...updates } as Registration : r));
