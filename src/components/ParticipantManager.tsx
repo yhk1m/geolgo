@@ -141,6 +141,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   const [editingPhotoSource, setEditingPhotoSource] = useState<File | null>(null);
   const [groupsMap, setGroupsMap] = useState<Record<string, GroupInfo>>({});
   const [teacherDetail, setTeacherDetail] = useState<TeacherDetail | null>(null);
+  const [groupTeacherConfirm, setGroupTeacherConfirm] = useState<{ count: number; teacherName: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -720,8 +721,28 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     setEditingPhotoSource(null);
   }
 
-  async function handleSaveEdit() {
+  async function handleSaveEdit(confirmed = false) {
     if (!editTarget || !editDraft) return;
+
+    // 단체 신청 + 지도교사 필드 변경 시 사전 확인 모달
+    if (!confirmed && editTarget.registration_type === 'group') {
+      const current = getTeacherDetail(editTarget);
+      const teacherChanged =
+        (editDraft.teacher_name || '') !== (current?.name || '') ||
+        (editDraft.teacher_phone || '') !== (current?.phone || '') ||
+        (editDraft.teacher_email || '') !== (current?.email || '');
+      if (teacherChanged) {
+        const groupCount = editTarget.group_id
+          ? data.filter(r => r.group_id === editTarget.group_id && r.payment_status !== 'deleted').length
+          : 0;
+        setGroupTeacherConfirm({
+          count: groupCount,
+          teacherName: editDraft.teacher_name || current?.name || '',
+        });
+        return;
+      }
+    }
+
     setEditSaving(true);
     try {
       const fieldLabels: Record<string, string> = {
@@ -1590,7 +1611,7 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
               </button>
               <button
                 type="button"
-                onClick={handleSaveEdit}
+                onClick={() => handleSaveEdit()}
                 disabled={editSaving}
                 className="flex-1 py-2 text-sm text-white bg-[#111] rounded-lg hover:bg-[#333] disabled:opacity-50"
               >
@@ -1742,6 +1763,38 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
           onCancel={() => setEditingPhotoSource(null)}
           onApply={applyEditedAdminPhoto}
         />
+      )}
+
+      {/* 단체 지도교사 일괄 수정 확인 모달 */}
+      {groupTeacherConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl p-6 w-[380px] shadow-xl mx-4">
+            <h3 className="text-lg font-semibold mb-3 text-[#111]">지도교사 정보 일괄 수정</h3>
+            <p className="text-sm text-[#333] leading-relaxed mb-4">
+              해당 지도교사가 단체 접수한
+              {groupTeacherConfirm.count > 0 && (
+                <> <strong className="text-[#111]">{groupTeacherConfirm.count}명</strong>의</>
+              )}
+              {' '}모든 학생의 지도교사 정보가 함께 수정됩니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setGroupTeacherConfirm(null)}
+                className="flex-1 py-2 text-sm text-[#666] bg-white border border-[#e5e5e5] rounded-lg hover:bg-[#f5f5f5]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => { setGroupTeacherConfirm(null); handleSaveEdit(true); }}
+                className="flex-1 py-2 text-sm text-white bg-[#111] rounded-lg hover:bg-[#333]"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 지도교사 정보 모달 */}
