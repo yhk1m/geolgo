@@ -66,6 +66,11 @@ CREATE POLICY "Anyone can view groups"
   ON groups FOR SELECT
   USING (true);
 
+CREATE POLICY "Anyone can update groups"
+  ON groups FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
 -- 관리자 업데이트 (service_role key 사용 시 RLS 우회)
 -- 또는 별도 관리자 정책 추가:
 CREATE POLICY "Service role can update registrations"

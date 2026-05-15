@@ -649,6 +649,18 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     setShowRosterModal(false);
   }
 
+  async function deleteEditLog(logId: string) {
+    const target = editLogs.find(l => l.id === logId);
+    if (!target) return;
+    const when = new Date(target.created_at).toLocaleString('ko-KR');
+    if (!window.confirm(`${when}\n에 기록된 이 수정이력을 삭제하시겠습니까?\n(되돌릴 수 없습니다)`)) return;
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('edit_logs').delete().eq('id', logId);
+      if (error) { alert('삭제 실패: ' + error.message); return; }
+    }
+    setEditLogs(prev => prev.filter(l => l.id !== logId));
+  }
+
   async function handleShowDetail(r: Registration) {
     setDetailTarget(r);
     setShowDetailModal(true);
@@ -1491,8 +1503,16 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
                     const editedBy = log.changed_fields._edited_by?.new;
                     const fields = Object.entries(log.changed_fields).filter(([k]) => k !== '_edited_by');
                     return (
-                      <div key={log.id} className="p-2 bg-[#fafafa] rounded border border-[#eee] text-xs">
-                        <p className="text-[#999] mb-1">
+                      <div key={log.id} className="relative p-2 bg-[#fafafa] rounded border border-[#eee] text-xs">
+                        <button
+                          type="button"
+                          onClick={() => deleteEditLog(log.id)}
+                          title="이 수정이력 삭제"
+                          className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-[#aaa] hover:text-[#c00] hover:bg-[#fee] rounded"
+                        >
+                          ×
+                        </button>
+                        <p className="text-[#999] mb-1 pr-5">
                           {new Date(log.created_at).toLocaleString('ko-KR')}
                           {editedBy && <span className="ml-2 px-1.5 py-0.5 rounded bg-[#e5e5e5] text-[#666]">{editedBy}</span>}
                         </p>
