@@ -49,13 +49,23 @@ export default function StatsPage() {
     loadStats();
 
     if (isSupabaseConfigured) {
-      const channel = supabase
-        .channel('stats_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => {
+      const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5분
+
+      const interval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
           loadStats();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
+        }
+      }, POLL_INTERVAL_MS);
+
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') loadStats();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
     }
   }, []);
 

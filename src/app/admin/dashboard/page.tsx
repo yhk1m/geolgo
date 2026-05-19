@@ -29,13 +29,23 @@ export default function AdminDashboard() {
     loadStats();
 
     if (isSupabaseConfigured) {
-      const channel = supabase
-        .channel('registrations_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => {
+      const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2분
+
+      const interval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
           loadStats();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
+        }
+      }, POLL_INTERVAL_MS);
+
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') loadStats();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
     }
   }, []);
 
