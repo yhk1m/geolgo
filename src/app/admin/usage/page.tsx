@@ -22,12 +22,12 @@ const AVG_BYTES_PER_PAGE_CONTENT = 4000;
 const POSTGRES_BASE_OVERHEAD_BYTES = 9 * 1024 * 1024; // Supabase 시스템 스키마 등 기본 점유
 
 // 클라이언트 SDK로 직접 조회 불가능한 항목 — 최근 수동 확인값 (Supabase 대시보드 기준)
-const REPORT_DATE = '2026-05-09';
-const REFERENCE_EGRESS_MB = 43;
-const REFERENCE_CACHED_EGRESS_MB = 555;
+const REPORT_DATE = '2026-05-20';
+const REFERENCE_EGRESS_MB = 114;
+const REFERENCE_CACHED_EGRESS_MB = 657;
 const REFERENCE_MAU = 0;
 const REFERENCE_EDGE_INVOCATIONS = 0;
-const REFERENCE_REALTIME_MESSAGES = 65;
+const REFERENCE_REALTIME_MESSAGES = 942;
 const REFERENCE_REALTIME_PEAK = 7;
 
 // 청구 주기 (Free Plan은 매월 28일 리셋)
