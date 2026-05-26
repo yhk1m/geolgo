@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { normalizeName, normalizePhone } from '@/lib/normalize';
 import { getMockRegistrations, getMockExamLocations } from '@/lib/mockdata';
 import { regionNameMap, REGIONS } from '@/lib/regions';
 import { computeExamNumbers } from '@/lib/examNumber';
@@ -62,7 +63,9 @@ export default function CheckPage() {
     setEditingId(null);
     setEditDraft(null);
 
-    const normalize = (p: string) => p.replace(/-/g, '');
+    const phoneCmp = (p: string) => normalizePhone(p).replace(/-/g, '');
+    const searchName = normalizeName(name);
+    const searchPhone = phoneCmp(phone);
 
     try {
       let matched: Registration[];
@@ -71,17 +74,17 @@ export default function CheckPage() {
         const { data, error: queryError } = await supabase
           .from('registrations')
           .select('*')
-          .eq('name', name)
+          .eq('name', searchName)
           .eq('birthdate', birthdate)
           .neq('payment_status', 'deleted')
           .neq('payment_status', 'cancelled');
         if (queryError) throw queryError;
         matched = (data || []).filter(
-          r => normalize(r.phone) === normalize(phone)
+          r => phoneCmp(r.phone) === searchPhone
         );
       } else {
         matched = getMockRegistrations().filter(
-          r => r.name === name && r.birthdate === birthdate && normalize(r.phone) === normalize(phone) && r.payment_status !== 'deleted' && r.payment_status !== 'cancelled'
+          r => normalizeName(r.name) === searchName && r.birthdate === birthdate && phoneCmp(r.phone) === searchPhone && r.payment_status !== 'deleted' && r.payment_status !== 'cancelled'
         ) as Registration[];
       }
 
@@ -135,6 +138,8 @@ export default function CheckPage() {
           changes[fieldLabels[key] || key] = { old: oldVal, new: newVal };
           if (key === 'grade') updates[key] = parseInt(newVal);
           else if (key === 'email' || key === 'birthdate' || key === 'class_name') updates[key] = newVal || null;
+          else if (key === 'name') updates[key] = normalizeName(newVal);
+          else if (key === 'phone') updates[key] = normalizePhone(newVal);
           else updates[key] = newVal;
         }
       }

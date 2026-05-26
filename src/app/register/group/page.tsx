@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { normalizeName, normalizePhone } from '@/lib/normalize';
 import { REGIONS } from '@/lib/regions';
 import { resizeImage } from '@/lib/resizeImage';
 import { fetchPageContent } from '@/lib/pageContent';
@@ -59,10 +60,10 @@ function parseCSV(text: string): Participant[] {
     if (i === 0 && (cols[0] === '이름' || cols[0].toLowerCase() === 'name')) continue;
     if (cols.length < 4) continue;
 
-    const name = cols[0];
+    const name = normalizeName(cols[0]);
     const grade = cols[1];
     const classNum = cols[2] || '';
-    const phone = cols[3];
+    const phone = normalizePhone(cols[3]);
     const birthdate = normalizeBirthdate(cols[4] || '');
     const email = cols[5] || '';
     if (!name || !grade || !phone) continue;
@@ -304,7 +305,7 @@ export default function GroupRegisterPage() {
     setResult(null);
 
     // 중복 신청 검사
-    const normalizePhone = (p: string) => p.replace(/[^0-9]/g, '');
+    const digitsOnly = (p: string) => p.replace(/[^0-9]/g, '');
     const dupList: { name: string; reason: string }[] = [];
 
     // 1) 입력 내 자체 중복 검사 (이름 + 생년월일 + 전화번호)
@@ -312,7 +313,7 @@ export default function GroupRegisterPage() {
     for (let i = 0; i < participants.length; i++) {
       const p = participants[i];
       if (!p.name || !p.birthdate || !p.phone) continue;
-      const key = `${p.name}|${p.birthdate}|${normalizePhone(p.phone)}`;
+      const key = `${normalizeName(p.name)}|${p.birthdate}|${digitsOnly(p.phone)}`;
       if (seen.has(key)) {
         dupList.push({ name: p.name, reason: `입력 목록 ${seen.get(key)! + 1}번과 ${i + 1}번이 동일 정보입니다.` });
       } else {
@@ -322,7 +323,7 @@ export default function GroupRegisterPage() {
 
     // 2) DB 내 기존 신청과 중복 검사
     if (dupList.length === 0) {
-      const names = Array.from(new Set(participants.map(p => p.name).filter(Boolean)));
+      const names = Array.from(new Set(participants.map(p => normalizeName(p.name)).filter(Boolean)));
       if (names.length > 0) {
         const { data: existing } = await supabase
           .from('registrations')
@@ -332,10 +333,11 @@ export default function GroupRegisterPage() {
         for (let i = 0; i < participants.length; i++) {
           const p = participants[i];
           if (!p.birthdate) continue;
+          const pName = normalizeName(p.name);
           const dup = (existing || []).find(r =>
-            r.name === p.name &&
+            r.name === pName &&
             r.birthdate === p.birthdate &&
-            normalizePhone(r.phone) === normalizePhone(p.phone)
+            digitsOnly(r.phone) === digitsOnly(p.phone)
           );
           if (dup) {
             dupList.push({
@@ -375,8 +377,8 @@ export default function GroupRegisterPage() {
         .from('groups')
         .insert({
           school_name: teacher.school,
-          teacher_name: teacher.name,
-          teacher_phone: teacher.phone,
+          teacher_name: normalizeName(teacher.name),
+          teacher_phone: normalizePhone(teacher.phone),
           teacher_email: teacher.email || null,
           region: teacher.region,
           participant_count: participants.length,
@@ -387,11 +389,11 @@ export default function GroupRegisterPage() {
       if (groupError) throw groupError;
 
       const registrations = participants.map((p, i) => ({
-        name: p.name,
+        name: normalizeName(p.name),
         school: teacher.school,
         grade: parseInt(p.grade),
         class_name: p.classNum,
-        phone: p.phone,
+        phone: normalizePhone(p.phone),
         email: p.email || null,
         birthdate: p.birthdate || null,
         photo_url: photoUrls[i],

@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { normalizeName, normalizePhone } from '@/lib/normalize';
 import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations, cancelMockRegistrations, uncancelMockRegistrations, getMockExamLocations, setMockExamLocations } from '@/lib/mockdata';
 import type { ExamLocation } from '@/lib/mockdata';
 import { regionNameMap, regionShortMap, REGIONS } from '@/lib/regions';
@@ -787,13 +788,18 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
           changes[fieldLabels[key] || key] = { old: oldVal, new: newVal };
           if (TEACHER_KEYS.includes(key)) {
             // Supabase 모드의 단체: groups 테이블; 그 외(개인/Mock): registrations 행
+            const teacherVal = key === 'teacher_name' ? (normalizeName(newVal) || null)
+              : key === 'teacher_phone' ? (normalizePhone(newVal) || null)
+              : (newVal || null);
             if (isGroup && isSupabaseConfigured) {
-              groupUpdates[key] = newVal || null;
+              groupUpdates[key] = teacherVal;
             } else {
-              updates[key] = newVal || null;
+              updates[key] = teacherVal;
             }
           } else if (key === 'grade') updates[key] = parseInt(newVal);
           else if (key === 'email' || key === 'birthdate' || key === 'class_name') updates[key] = newVal || null;
+          else if (key === 'name') updates[key] = normalizeName(newVal);
+          else if (key === 'phone') updates[key] = normalizePhone(newVal);
           else updates[key] = newVal;
         }
       }

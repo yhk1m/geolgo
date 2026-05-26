@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { normalizeName, normalizePhone } from '@/lib/normalize';
 import { REGIONS } from '@/lib/regions';
 import { fetchPageContent } from '@/lib/pageContent';
 import PhotoEditor from '@/components/PhotoEditor';
@@ -133,16 +134,21 @@ export default function IndividualRegisterPage() {
       ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`
       : null;
 
+    const normalizedName = normalizeName(form.name);
+    const normalizedPhone = normalizePhone(form.phone);
+    const normalizedTeacherPhone = normalizePhone(form.teacherPhone);
+    const normalizedTeacherName = normalizeName(form.teacherName);
+
     // 중복 신청 검사: 이름 + 생년월일 + 전화번호가 동일한 활성 신청이 있으면 차단
     if (birthdateStr) {
-      const normalizePhone = (p: string) => p.replace(/[^0-9]/g, '');
+      const digitsOnly = (p: string) => p.replace(/[^0-9]/g, '');
       const { data: existing } = await supabase
         .from('registrations')
         .select('id, phone, school')
-        .eq('name', form.name)
+        .eq('name', normalizedName)
         .eq('birthdate', birthdateStr)
         .neq('payment_status', 'deleted');
-      const dup = (existing || []).find(r => normalizePhone(r.phone) === normalizePhone(form.phone));
+      const dup = (existing || []).find(r => digitsOnly(r.phone) === digitsOnly(normalizedPhone));
       if (dup) {
         setDuplicateAlert(
           `${form.name}님은 이미 신청 내역이 있습니다.\n(이름·생년월일·전화번호가 동일한 접수 확인)\n\n중복 신청을 방지하기 위해 접수가 차단되었습니다. 신청 내역 확인은 '접수 확인' 메뉴에서 가능합니다.`
@@ -168,11 +174,11 @@ export default function IndividualRegisterPage() {
       }
 
       const { error } = await supabase.from('registrations').insert({
-        name: form.name,
+        name: normalizedName,
         school: form.school,
         grade: parseInt(form.grade),
         class_name: form.classNum,
-        phone: form.phone,
+        phone: normalizedPhone,
         email: form.email || null,
         region: form.region,
         birthdate: birthdateStr,
@@ -180,8 +186,8 @@ export default function IndividualRegisterPage() {
         registration_type: 'individual',
         payment_status: 'pending',
         payment_amount: 20000,
-        teacher_name: form.teacherName || null,
-        teacher_phone: form.teacherPhone || null,
+        teacher_name: normalizedTeacherName || null,
+        teacher_phone: normalizedTeacherPhone || null,
         teacher_email: form.teacherEmail || null,
       });
 
