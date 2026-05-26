@@ -589,19 +589,24 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   function downloadExcel(target: 'all' | 'pending' | 'confirmed') {
     const base = target === 'all' ? activeData : target === 'pending' ? pending : confirmed;
     const label = target === 'all' ? '전체명단' : target === 'pending' ? '입금대기' : '입금확인';
-    const rows = base.map(r => ({
-      '수험번호': examNumbers.get(r.id) || '-',
-      '이름': r.name,
-      '학교': r.school,
-      '학년': r.grade,
-      '전화번호': r.phone,
-      '이메일': r.email || '',
-      '지역': regionNameMap[r.region] || r.region,
-      '접수유형': r.registration_type === 'group' ? '단체' : '개인',
-      '입금상태': r.payment_status === 'confirmed' ? '확인' : '대기',
-      '참가비': r.payment_amount,
-      '신청일': new Date(r.created_at).toLocaleDateString('ko-KR'),
-    }));
+    const rows = base.map(r => {
+      const t = getTeacherDetail(r);
+      return {
+        '수험번호': examNumbers.get(r.id) || '-',
+        '이름': r.name,
+        '학교': r.school,
+        '학년': r.grade,
+        '전화번호': r.phone,
+        '이메일': r.email || '',
+        '지역': regionNameMap[r.region] || r.region,
+        '접수유형': r.registration_type === 'group' ? '단체' : '개인',
+        '입금상태': r.payment_status === 'confirmed' ? '확인' : '대기',
+        '참가비': r.payment_amount,
+        '신청일': new Date(r.created_at).toLocaleDateString('ko-KR'),
+        '지도교사 이름': t?.name || '',
+        '지도교사 번호': t?.phone || '',
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, label);
