@@ -1,7 +1,7 @@
 // © 2026 김용현
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { normalizeName, normalizePhone } from '@/lib/normalize';
 import { getMockRegistrations, updateMockPaymentStatus, softDeleteMockRegistrations, restoreMockRegistrations, permanentDeleteMockRegistrations, cancelMockRegistrations, uncancelMockRegistrations, getMockExamLocations, setMockExamLocations } from '@/lib/mockdata';
@@ -128,6 +128,8 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [rosterRegion, setRosterRegion] = useState('');
   const [rosterProgress, setRosterProgress] = useState<{ current: number; total: number } | null>(null);
+  const [excelMenuOpen, setExcelMenuOpen] = useState(false);
+  const excelMenuRef = useRef<HTMLDivElement | null>(null);
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [detailTarget, setDetailTarget] = useState<Registration | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -552,6 +554,17 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
   const isTrashTab = tab === 'trash';
   const isCancelTab = tab === 'cancelled';
 
+  useEffect(() => {
+    if (!excelMenuOpen) return;
+    function onClick(e: MouseEvent) {
+      if (excelMenuRef.current && !excelMenuRef.current.contains(e.target as Node)) {
+        setExcelMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [excelMenuOpen]);
+
   const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -586,9 +599,19 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
     setSelected(new Set());
   };
 
-  function downloadExcel(target: 'all' | 'pending' | 'confirmed') {
-    const base = target === 'all' ? activeData : target === 'pending' ? pending : confirmed;
-    const label = target === 'all' ? '전체명단' : target === 'pending' ? '입금대기' : '입금확인';
+  function downloadExcel(target: 'all' | 'pending' | 'confirmed' | 'trash' | 'cancelled') {
+    const base =
+      target === 'all' ? activeData
+      : target === 'pending' ? pending
+      : target === 'confirmed' ? confirmed
+      : target === 'trash' ? trashed
+      : cancelledList;
+    const label =
+      target === 'all' ? '전체명단'
+      : target === 'pending' ? '입금대기'
+      : target === 'confirmed' ? '입금확인'
+      : target === 'trash' ? '휴지통'
+      : '신청취소';
     const rows = base.map(r => {
       const t = getTeacherDetail(r);
       return {
@@ -944,17 +967,36 @@ export default function ParticipantManager({ regionFilter, readOnly = false }: P
         >
           수험표 PDF 일괄 다운로드
         </button>
-        <div className="flex items-center border border-[#e5e5e5] rounded-lg overflow-hidden">
-          <span className="px-3 py-1.5 text-sm font-medium text-[#999] bg-[#fafafa] hidden sm:inline">엑셀 다운로드</span>
-          <button onClick={() => downloadExcel('all')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] sm:border-l border-[#e5e5e5]">
-            전체
+        <div className="relative" ref={excelMenuRef}>
+          <button
+            type="button"
+            onClick={() => setExcelMenuOpen(o => !o)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5] rounded-lg"
+          >
+            <span>엑셀 다운로드</span>
+            <svg className={`w-3 h-3 transition-transform ${excelMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
-          <button onClick={() => downloadExcel('pending')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
-            대기
-          </button>
-          <button onClick={() => downloadExcel('confirmed')} className="px-3 py-1.5 text-xs sm:text-sm text-[#666] bg-white hover:bg-[#f5f5f5] border-l border-[#e5e5e5]">
-            확인
-          </button>
+          {excelMenuOpen && (
+            <div className="absolute right-0 mt-1 w-32 bg-white border border-[#e5e5e5] rounded-lg shadow-md z-20 overflow-hidden">
+              {([
+                ['all', '전체'],
+                ['pending', '대기'],
+                ['confirmed', '확인'],
+                ['trash', '휴지통'],
+                ['cancelled', '신청 취소'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { downloadExcel(key); setExcelMenuOpen(false); }}
+                  className="block w-full text-left px-3 py-2 text-xs sm:text-sm text-[#666] hover:bg-[#f5f5f5]"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
